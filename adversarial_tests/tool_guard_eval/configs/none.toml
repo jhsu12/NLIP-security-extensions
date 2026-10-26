@@ -1,0 +1,2 @@
+# Baseline: no tool guard (the agent runs undefended).
+enabled = false

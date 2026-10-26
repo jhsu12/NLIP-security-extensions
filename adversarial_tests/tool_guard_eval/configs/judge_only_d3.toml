@@ -1,0 +1,7 @@
+# L2 alone: every side-effecting call goes to the d3 judge; no policy rules, no scanning.
+[options]
+policy_rules = false
+judge = "d3"
+judge_model = "vllm-sr/d3-flash"
+scanner = "off"
+taint = false

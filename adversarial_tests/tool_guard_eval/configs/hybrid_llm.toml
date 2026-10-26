@@ -1,0 +1,8 @@
+# Full tool guard with the gemma LLM judge (also used for result scanning).
+[options]
+judge = "llm"
+judge_model = "gemma-4-31b-it"
+scanner = "rules+judge"
+taint = true
+threshold = 0.5
+tainted_threshold = 0.7

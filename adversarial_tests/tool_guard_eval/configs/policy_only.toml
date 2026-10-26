@@ -1,0 +1,4 @@
+# L1 policy + rule-based result scanning; no judge model at all.
+[options]
+judge = "none"
+scanner = "rules"

@@ -21,6 +21,13 @@ agents = [
     "langchain>=1.0",
     "langchain-openai>=1.0",
 ]
+workspace = [
+    "agentdojo==0.1.35",
+    "langchain>=1.0",
+    "langchain-mcp-adapters>=0.3",
+    "langchain-openai>=1.0",
+    "mcp>=1.30",
+]
 test = ["pytest>=8"]
 
 [tool.setuptools.packages.find]

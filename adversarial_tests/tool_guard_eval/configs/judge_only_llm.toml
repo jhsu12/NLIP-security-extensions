@@ -1,0 +1,7 @@
+# L2 alone with a generative LLM judge (gemma) instead of d3.
+[options]
+policy_rules = false
+judge = "llm"
+judge_model = "gemma-4-31b-it"
+scanner = "off"
+taint = false

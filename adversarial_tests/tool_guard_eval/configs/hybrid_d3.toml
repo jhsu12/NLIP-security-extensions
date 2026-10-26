@@ -1,0 +1,8 @@
+# Full tool guard: policy + d3 judge + rules/d3 result scanning + taint.
+[options]
+judge = "d3"
+judge_model = "vllm-sr/d3-flash"
+scanner = "rules+judge"
+taint = true
+threshold = 0.5
+tainted_threshold = 0.7

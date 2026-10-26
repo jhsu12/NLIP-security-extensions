@@ -1,0 +1,37 @@
+[security_extensions.audit_example]
+entrypoint = "security_extensions.simple_example.audit_security_extension:AuditSecurityExtension"
+
+# Type-3 tool-boundary guard. Its NLIP extension records the user's task at ingress;
+# the application installs the matching tool middleware when this is enabled.
+[security_extensions.tool_guard]
+entrypoint = "security_extensions.tool_guard.nlip_extension:ToolGuardContextExtension"
+
+[security_extensions.tool_guard.options]
+instance = "workspace"            # must match the agent entity name
+policy = "policies/workspace.toml"
+policy_rules = true               # false: no hard rules, every side-effecting call goes to the judge
+judge = "d3"                      # none | d3 | llm | stub
+judge_model = "vllm-sr/d3-flash"  # or vllm-sr/d3-turbo; for judge = "llm": gemma-4-31b-it
+threshold = 0.5                   # minimum P(aligned) to allow an escalated call
+tainted_threshold = 0.7           # ... after injected content was seen in this session
+taint = true
+scanner = "rules+judge"           # off | rules | judge | rules+judge
+injection_threshold = 0.5
+on_injection = "redact"           # redact | report
+catalog = "off"                   # tool-description check: off | rules | judge | rules+judge
+# catalog_judge = "d3"            # detector for descriptions if different from judge
+audit_path = "logs/tool_guard_audit.jsonl"
+
+[entities.workspace]
+host = "127.0.0.1"
+port = 8021
+endpoint = "http://127.0.0.1:8021/nlip"
+
+# List order is execution order; [] disables all extensions for that point.
+# Remove "tool_guard" from both lists to run the agent undefended.
+[entities.workspace.security]
+ingress = ["tool_guard"]
+egress = ["tool_guard"]
+
+[user]
+default_target = "workspace"

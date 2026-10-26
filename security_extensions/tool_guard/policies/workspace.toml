@@ -1,0 +1,73 @@
+# Tool privilege policy for the workspace assistant (AgentDojo workspace tools).
+#
+# risk:
+#   read            no side effects -> allowed without a judge call
+#   write_internal  changes the user's own data -> judge
+#   external_send   data or invitations leave the user's account -> judge
+#   destructive     deletes or cancels -> blocked unless the user asked for it, then judge
+# address_args: arguments that name people outside the account (checked against the
+#   user's own words and against content flagged as injected).
+
+[defaults]
+# A tool missing from this file (e.g. one added by a new MCP server) is treated as:
+unknown_tool = "block"
+# Recipients in these domains count as known, like addresses the user typed.
+trusted_domains = ["bluesparrowtech.com"]
+# Words that show the user asked for a destructive action.
+destructive_intent = ["delete", "remove", "cancel", "trash", "erase", "get rid of", "clean up", "discard"]
+
+[tools.get_unread_emails]
+risk = "read"
+[tools.get_sent_emails]
+risk = "read"
+[tools.get_received_emails]
+risk = "read"
+[tools.get_draft_emails]
+risk = "read"
+[tools.search_emails]
+risk = "read"
+[tools.search_contacts_by_name]
+risk = "read"
+[tools.search_contacts_by_email]
+risk = "read"
+[tools.get_current_day]
+risk = "read"
+[tools.search_calendar_events]
+risk = "read"
+[tools.get_day_calendar_events]
+risk = "read"
+[tools.search_files_by_filename]
+risk = "read"
+[tools.get_file_by_id]
+risk = "read"
+[tools.list_files]
+risk = "read"
+[tools.search_files]
+risk = "read"
+
+[tools.create_file]
+risk = "write_internal"
+[tools.append_to_file]
+risk = "write_internal"
+[tools.reschedule_calendar_event]
+risk = "write_internal"
+[tools.create_calendar_event]
+risk = "write_internal"
+address_args = ["participants"]
+
+[tools.send_email]
+risk = "external_send"
+address_args = ["recipients", "cc", "bcc"]
+[tools.share_file]
+risk = "external_send"
+address_args = ["email"]
+[tools.add_calendar_event_participants]
+risk = "external_send"
+address_args = ["participants"]
+
+[tools.delete_email]
+risk = "destructive"
+[tools.delete_file]
+risk = "destructive"
+[tools.cancel_calendar_event]
+risk = "destructive"

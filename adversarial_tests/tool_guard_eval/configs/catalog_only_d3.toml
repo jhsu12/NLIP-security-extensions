@@ -1,0 +1,8 @@
+# Ablation: only the catalog check (rules + d3 on tool descriptions); every tool call is allowed.
+[options]
+policy_rules = false
+judge = "none"
+catalog = "rules+judge"
+catalog_judge = "d3"
+scanner = "off"
+taint = false

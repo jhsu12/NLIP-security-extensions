@@ -1,0 +1,9 @@
+# Full tool guard plus the catalog check on MCP tool descriptions (rules + d3).
+[options]
+judge = "d3"
+judge_model = "vllm-sr/d3-flash"
+scanner = "rules+judge"
+catalog = "rules+judge"
+taint = true
+threshold = 0.5
+tainted_threshold = 0.7

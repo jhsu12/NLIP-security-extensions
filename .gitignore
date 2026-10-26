@@ -8,3 +8,7 @@ __pycache__/
 .pytest_cache/
 build/
 *.egg-info/
+
+# Evaluation logs and tool-guard audit logs
+adversarial_tests/tool_guard_eval/results/logs/
+logs/
