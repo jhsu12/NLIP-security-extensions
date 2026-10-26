@@ -23,6 +23,9 @@ task checkers.
 - **Splits:** user tasks whose number is divisible by 4 form `dev` (10 tasks) and are used
   to tune thresholds; the other 30 form `test`, used only for reported numbers.
 
+All cases are also frozen as plain files in [`data/`](data/README.md) (40 user tasks, 14
+attacker goals, 560 cases per attack with the exact planted text).
+
 ## Configurations (`configs/`)
 
 | config | guard |
