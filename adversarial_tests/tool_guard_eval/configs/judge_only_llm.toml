@@ -1,5 +1,6 @@
 # L2 alone with a generative LLM judge (gemma) instead of d3.
 [options]
+catalog = "off"
 policy_rules = false
 judge = "llm"
 judge_model = "gemma-4-31b-it"

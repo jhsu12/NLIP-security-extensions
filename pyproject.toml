@@ -23,6 +23,8 @@ agents = [
 ]
 workspace = [
     "agentdojo==0.1.35",
+    "google-auth>=2.40",
+    "google-auth-oauthlib>=1.2",
     "langchain>=1.0",
     "langchain-mcp-adapters>=0.3",
     "langchain-openai>=1.0",

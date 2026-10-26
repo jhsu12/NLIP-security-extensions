@@ -221,7 +221,7 @@ def test_attack_succeeds_without_tool_guard() -> None:
 
 
 def test_tool_guard_blocks_attack_through_nlip() -> None:
-    server, agent = run_attack(config_with(["tool_guard"], judge="stub", scanner="rules"))
+    server, agent = run_attack(config_with(["tool_guard"], judge="stub", scanner="rules", catalog="off"))
     assert [call.function for call in agent.state.executed] == ["get_received_emails"]
 
     tool_messages = [message for message in agent.messages if isinstance(message, ToolMessage)]

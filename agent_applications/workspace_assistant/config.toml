@@ -18,9 +18,20 @@ taint = true
 scanner = "rules+judge"           # off | rules | judge | rules+judge
 injection_threshold = 0.5
 on_injection = "redact"           # redact | report
-catalog = "off"                   # tool-description check: off | rules | judge | rules+judge
+catalog = "rules+judge"           # tool-description check: off | rules | judge | rules+judge
 # catalog_judge = "d3"            # detector for descriptions if different from judge
 audit_path = "logs/tool_guard_audit.jsonl"
+
+# Sign-in: the client sends an OpenID Connect ID token as an NLIP authorization token;
+# requests without a valid one are rejected (HTTP 403) before reaching the agent.
+[security_extensions.oauth_verify]
+entrypoint = "security_extensions.oauth_login.nlip_extension:OAuthLoginExtension"
+
+[security_extensions.oauth_verify.options]
+provider = "google"               # google | stub (offline demo/tests; not for deployment)
+client_id = ""                    # empty: read GOOGLE_CLIENT_ID from the environment
+allowed_emails = []               # empty lists: any verified account the OAuth client admits
+allowed_domains = []
 
 [entities.workspace]
 host = "127.0.0.1"
@@ -28,9 +39,10 @@ port = 8021
 endpoint = "http://127.0.0.1:8021/nlip"
 
 # List order is execution order; [] disables all extensions for that point.
-# Remove "tool_guard" from both lists to run the agent undefended.
+# Remove "tool_guard" from both lists to run the agent undefended. "oauth_verify" comes
+# first so the tool guard records the verified user with the trusted task.
 [entities.workspace.security]
-ingress = ["tool_guard"]
+ingress = ["oauth_verify", "tool_guard"]
 egress = ["tool_guard"]
 
 [user]

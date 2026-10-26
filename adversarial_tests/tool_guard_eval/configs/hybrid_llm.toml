@@ -1,5 +1,6 @@
 # Full tool guard with the gemma LLM judge (also used for result scanning).
 [options]
+catalog = "off"
 judge = "llm"
 judge_model = "gemma-4-31b-it"
 scanner = "rules+judge"

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import json
 import time
 
@@ -19,8 +20,18 @@ from agentdojo.agent_pipeline.tool_execution import text_content_block_from_stri
 
 from nlip_sdk import NLIPMessage
 
+from ._config import CONFIG
 from .environment import WorkspaceState, load_suite
 from .nlip_agent import ENTITY_NAME, WorkspaceNLIPAgent
+
+
+def local_config() -> dict:
+    """config.toml without sign-in: this script calls the server in-process, not over HTTP."""
+    config = copy.deepcopy(CONFIG)
+    security = config["entities"][ENTITY_NAME]["security"]
+    security["ingress"] = [name for name in security["ingress"] if name != "oauth_verify"]
+    return config
+
 
 DEFAULT_TASKS = ["user_task_0", "user_task_3", "user_task_6", "user_task_13", "user_task_25"]
 
@@ -36,7 +47,7 @@ async def run_task(task_id: str, *, model: str | None = None) -> dict:
         pre_environment["env"] = state.env.model_copy(deep=True)
         return state
 
-    server = WorkspaceNLIPAgent(state_factory=state_factory, model=model)
+    server = WorkspaceNLIPAgent(local_config(), state_factory=state_factory, model=model)
     started = time.perf_counter()
     error = None
     try:

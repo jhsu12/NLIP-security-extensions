@@ -1,5 +1,6 @@
 # Ablation: full guard with d3, but scanning no longer raises the threshold or feeds provenance.
 [options]
+catalog = "off"
 judge = "d3"
 judge_model = "vllm-sr/d3-flash"
 scanner = "rules+judge"
