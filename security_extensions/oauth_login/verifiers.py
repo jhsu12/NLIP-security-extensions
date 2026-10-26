@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import json
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,12 +46,16 @@ def identity_from_claims(claims: dict[str, Any]) -> Identity:
 
 
 class GoogleVerifier:
-    def __init__(self, client_id: str, *, clock_skew: int = 10) -> None:
-        if not client_id:
+    def __init__(self, client_id: str | Sequence[str], *, clock_skew: int = 10) -> None:
+        # Several of our OAuth clients may sign users in (CLI = Desktop app, browser = Web
+        # application); a token issued to any of them is accepted, any other app's is not.
+        client_ids = [client_id] if isinstance(client_id, str) else list(client_id)
+        client_ids = [item for item in client_ids if item]
+        if not client_ids:
             raise ValueError("Google sign-in needs an OAuth client id (set GOOGLE_CLIENT_ID or client_id)")
         from google.auth.transport.requests import Request
 
-        self.client_id = client_id
+        self.client_ids = client_ids
         self.clock_skew = clock_skew
         self._request = Request()
         # sha256(token) -> identity, so a token reused on every message of a turn is
@@ -73,7 +78,7 @@ class GoogleVerifier:
                 id_token.verify_oauth2_token,
                 token,
                 self._request,
-                self.client_id,
+                self.client_ids,
                 clock_skew_in_seconds=self.clock_skew,
             )
         except (ValueError, GoogleAuthError) as error:

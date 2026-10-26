@@ -106,6 +106,7 @@ def google_claims(**overrides):
 
 def test_google_verifier_requires_a_client_id(monkeypatch) -> None:
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_WEB_CLIENT_ID", raising=False)
     with pytest.raises(ValueError, match="client id"):
         OAuthLoginExtension(provider="google")
 
@@ -125,7 +126,7 @@ def test_google_verifier_checks_audience_and_caches(monkeypatch) -> None:
     verifier = GoogleVerifier("client-123.apps.googleusercontent.com")
     assert run(verifier.verify("good")).email == USER
     assert run(verifier.verify("good")).subject == "1234"
-    assert calls == [("good", "client-123.apps.googleusercontent.com")]  # second check was cached
+    assert calls == [("good", ["client-123.apps.googleusercontent.com"])]  # second check was cached
     with pytest.raises(VerificationError, match="signature"):
         run(verifier.verify("forged"))
     with pytest.raises(VerificationError, match="not verified"):
@@ -182,3 +183,19 @@ def test_login_is_off_when_not_in_ingress() -> None:
     config = copy.deepcopy(CONFIG)
     config["entities"]["workspace"]["security"] = {"ingress": ["tool_guard"], "egress": ["tool_guard"]}
     assert token_source(config) is None
+
+
+def test_desktop_and_web_clients_are_both_accepted(monkeypatch) -> None:
+    from google.oauth2 import id_token
+
+    audiences = []
+    monkeypatch.setattr(
+        id_token, "verify_oauth2_token", lambda token, request, audience, **_: audiences.append(audience) or google_claims()
+    )
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "desktop.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_WEB_CLIENT_ID", "web.apps.googleusercontent.com")
+    extension = OAuthLoginExtension(provider="google")
+    assert ingress(extension, NLIPSession("s1"), "google-token").action is SecurityAction.REPLACE
+    assert audiences == [["desktop.apps.googleusercontent.com", "web.apps.googleusercontent.com"]]
+    monkeypatch.delenv("GOOGLE_WEB_CLIENT_ID")
+    assert OAuthLoginExtension(provider="google").verifier.client_ids == ["desktop.apps.googleusercontent.com"]

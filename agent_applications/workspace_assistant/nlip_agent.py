@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.language_models import BaseChatModel
 from nlip_sdk import NLIPMessage, NLIPServer, NLIPSession
 from nlip_sdk.nlip_security_extensions import SecurityExtensionManager
@@ -33,6 +34,7 @@ class WorkspaceNLIPAgent(NLIPServer):
         state_factory: Callable[[], WorkspaceState] = WorkspaceState.create,
         model: str | None = None,
         chat_model_factory: Callable[[], BaseChatModel] | None = None,
+        extra_middleware: Callable[[], Sequence[AgentMiddleware]] | None = None,
     ) -> None:
         config = config or CONFIG
         clear_guard(ENTITY_NAME)
@@ -43,6 +45,8 @@ class WorkspaceNLIPAgent(NLIPServer):
         self._state_factory = state_factory
         self._model = model
         self._chat_model_factory = chat_model_factory
+        # Installed inside the guard's middleware (e.g. the demo's observe-only tool logger).
+        self._extra_middleware = extra_middleware
         self.agents: dict[str, WorkspaceAgent] = {}
 
     async def session_started(self, server_session: NLIPSession) -> None:
@@ -51,6 +55,8 @@ class WorkspaceNLIPAgent(NLIPServer):
         # config.toml is connected to the agent's own tool hook here.
         guard = self.guard
         middleware = [ToolGuardMiddleware(guard, server_session.id, SERVER_NAME)] if guard else []
+        if self._extra_middleware is not None:
+            middleware += list(self._extra_middleware())
         tool_filter = None
         if guard is not None and guard.catalog is not None:
 

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tool Guard Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="mark">◆</span> Tool Guard <span id="mode" class="pill"></span></div>
+    <nav class="nav"><a href="/" class="on">Demo</a><a href="/how">How it works</a><a href="/checks">Checks</a></nav>
+    <div class="account">
+      <span id="who" class="who" hidden></span>
+      <div id="google-button"></div>
+      <button id="stub-login" class="btn ghost" hidden>Sign in</button>
+    </div>
+  </header>
+
+  <section class="context">
+    <div class="persona">
+      <div class="avatar">EJ</div>
+      <div>
+        <div class="persona-name">You are <b>Emma Johnson</b></div>
+        <div class="muted">Blue Sparrow Tech · your assistant can use these tools</div>
+      </div>
+    </div>
+    <div id="tool-groups" class="groups"></div>
+  </section>
+
+  <section class="controls">
+    <div class="control">
+      <span class="label">Scenario</span>
+      <div class="seg" id="scenario">
+        <button data-v="benign" class="on">Normal</button>
+        <button data-v="tools">Poisoned tools</button>
+        <button data-v="data">Poisoned data</button>
+      </div>
+    </div>
+    <div class="control" id="goal-control" hidden>
+      <span class="label">Attacker wants to</span>
+      <select id="goal"></select>
+    </div>
+    <div class="control">
+      <span class="label">Tool guard</span>
+      <button id="guard" class="switch on" role="switch" aria-checked="true"><span class="knob"></span><span class="txt">On</span></button>
+    </div>
+    <button id="show-attack" class="btn ghost" title="Task, attack and guard-off setup where the evaluation saw the attack succeed">⚡ Show me an attack</button>
+    <details class="advanced">
+      <summary title="Advanced">⋯</summary>
+      <div class="menu">
+        <label>Poisoning style
+          <select id="style"><option value="tool_poisoning">Hidden &lt;IMPORTANT&gt; block</option><option value="tool_poisoning_plain">One plain sentence</option></select>
+        </label>
+        <label>Guard variant
+          <select id="variant"></select>
+        </label>
+        <label id="model-row">Model <select id="model"></select></label>
+        <label class="row"><input type="checkbox" id="send-token" checked> Send sign-in token</label>
+        <label class="row file">Replay a saved run <input type="file" id="replay" accept="application/json"></label>
+      </div>
+    </details>
+  </section>
+
+  <div id="attack-banner" class="banner" hidden></div>
+
+  <main class="grid">
+    <section class="chat card">
+      <div id="messages" class="messages">
+        <div class="welcome">
+          <h2>Ask your assistant</h2>
+          <p class="muted">Pick a task or type your own. Change the scenario and guard above, then compare.</p>
+        </div>
+      </div>
+      <div id="suggestions" class="suggestions"></div>
+      <form id="composer" class="composer">
+        <textarea id="input" rows="1" placeholder="Message the assistant…"></textarea>
+        <button class="btn primary" id="send" aria-label="Send">↑</button>
+      </form>
+      <div class="chat-foot">
+        <button id="new-chat" class="link">New chat</button>
+        <span id="error" class="error"></span>
+      </div>
+    </section>
+
+    <aside class="activity card">
+      <div class="activity-head">
+        <h3>Guard activity</h3>
+        <a id="export" class="link small" hidden>Save run</a>
+      </div>
+      <div id="outcome" class="outcome" hidden></div>
+      <ol id="steps" class="steps"><li class="placeholder muted">Checks appear here as the assistant works.</li></ol>
+    </aside>
+  </main>
+
+  <dialog id="tools-dialog">
+    <form method="dialog"><button class="x" aria-label="Close">×</button></form>
+    <div id="tools-body"></div>
+  </dialog>
+  <script src="/static/app.js"></script>
+</body>
+</html>

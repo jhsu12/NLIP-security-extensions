@@ -36,7 +36,7 @@ class OAuthLoginExtension(SecurityExtension):
     def __init__(
         self,
         provider: str = "google",
-        client_id: str = "",
+        client_id: str | Sequence[str] = "",
         allowed_emails: Sequence[str] = (),
         allowed_domains: Sequence[str] = (),
         stub_secret: str = STUB_SECRET,
@@ -44,7 +44,9 @@ class OAuthLoginExtension(SecurityExtension):
     ) -> None:
         provider = provider.casefold()
         if provider == "google":
-            self.verifier = GoogleVerifier(client_id or os.getenv("GOOGLE_CLIENT_ID", ""))
+            # Empty: the CLI's Desktop client and the web page's client from the environment.
+            client_ids = client_id or [os.getenv("GOOGLE_CLIENT_ID", ""), os.getenv("GOOGLE_WEB_CLIENT_ID", "")]
+            self.verifier = GoogleVerifier(client_ids)
         elif provider == "stub":
             self.verifier = StubVerifier(stub_secret, audience=stub_audience)
         else:

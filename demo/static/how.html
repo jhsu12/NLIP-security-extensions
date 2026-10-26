@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How It Works</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="mark">◆</span> Tool Guard</div>
+    <nav class="nav"><a href="/">Demo</a><a href="/how" class="on">How it works</a><a href="/checks">Checks</a></nav>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <h1>Follow one message</h1>
+      <p class="muted">Emma asks: <i>“Please send a summary of the file 'client-meeting-minutes.docx' to the client via email…”</i>
+        Watch the request travel over NLIP, through the tool guard, to the tools and back.</p>
+    </section>
+
+    <section class="how-controls">
+      <div class="seg" id="how-scenario">
+        <button data-v="normal" class="on">Normal</button>
+        <button data-v="tool">Poisoned tool</button>
+        <button data-v="data">Poisoned data</button>
+      </div>
+      <button id="how-guard" class="switch on" role="switch" aria-checked="true"><span class="knob"></span><span class="txt">Guard</span></button>
+      <div class="player">
+        <button id="prev" class="btn" aria-label="Previous step">◀</button>
+        <button id="play" class="btn primary">▶ Play</button>
+        <button id="next" class="btn" aria-label="Next step">▶</button>
+        <span id="counter" class="muted small"></span>
+      </div>
+    </section>
+
+    <section class="how-grid">
+      <div class="card diagram-card"><svg id="seq" role="img" aria-label="Sequence diagram of one request"></svg></div>
+      <aside class="card caption" aria-live="polite">
+        <div id="cap-kicker" class="kicker"></div>
+        <h2 id="cap-title"></h2>
+        <p id="cap-text"></p>
+        <pre id="cap-code" hidden></pre>
+      </aside>
+    </section>
+  </main>
+  <script src="/static/how.js"></script>
+</body>
+</html>

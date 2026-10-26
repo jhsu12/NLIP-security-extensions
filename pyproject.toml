@@ -38,10 +38,12 @@ include = [
     "nlip_examples*",
     "security_extensions*",
     "agent_applications*",
+    "demo*",
 ]
 
 [tool.setuptools.package-data]
 "nlip_examples.nlip_integration_examples" = ["config.toml"]
+demo = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "adversarial_tests"]
