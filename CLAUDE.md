@@ -11,8 +11,10 @@ session that built everything on branch `tool-guard`.
   (invoked immediately before/after tool calls), in a realistic NLIP agent app, evaluated
   with and without the defense: effectiveness, false alarms, running cost, honest limits.
   The threat model is **already approved by the instructor**.
-- This repo is the user's fork (`origin` = `jhsu12/NLIP-security-extensions`; `upstream` =
-  instructor's `systemsecurity-uiuc/NLIP-security-extensions`). Work on branch `tool-guard`.
+- Repo home (since 2026-10-26): `origin` = `MCP-Tool-Guard/ToolGuard` (the user's GitHub
+  org). Its `main` = our work; `tool-guard` is kept in sync with it. Old fork = remote
+  `jhsu12-fork` (`jhsu12/NLIP-security-extensions`); `upstream` = instructor's
+  `systemsecurity-uiuc/NLIP-security-extensions`. Work on branch `tool-guard`.
 - `../CS598-AISecurity` is an old weather-agent prototype; no longer the build target.
 
 ### Grading points to keep in mind
@@ -43,75 +45,85 @@ session that built everything on branch `tool-guard`.
   `vllm-sr/d3-flash` (default) / `d3-turbo`. Returns calibrated P(yes) via `noul` questions.
   Max 8 extra `states` per request (the code batches 9 per request). Gemma is the alternative LLM judge.
 
-## What exists (all committed on `tool-guard`)
+## What exists
 
 - `agent_applications/workspace_assistant/`: NLIP email/calendar/drive assistant.
-  Backend, tools, tasks and checkers come from **AgentDojo `workspace` v1.2.2** (24 tools; user
-  Emma Johnson). Tools are served via an in-process **MCP** server (`mcp_server.py`); a LangChain
-  `create_agent` (`agent.py`) has a model-call cap of 20 per turn; `nlip_agent.py` is the
-  `NLIPServer` with one backend and agent per NLIP session. `config.toml` enables extensions.
-- `security_extensions/tool_guard/`: **the security function**. See `WORKFLOW.md` (Mermaid).
-  - `guard.py` `ToolGuard`: L0 validation (fail closed) → L1 `policy.py` (+ `policies/workspace.toml`:
-    risk classes; block unknown tools, values planted in injected content, and deletes without user intent)
-    → L2 `judges.py` (d3 / LLM / stub; "would the user approve this exact call?"; threshold
-    0.5, 0.7 once tainted; evidence lines from earlier results) → L3 `scanner.py` (rules + d3,
-    redacts the injected span, taints the session) → `catalog.py` (scans and pins MCP tool
-    descriptions; strips poison before the model sees it; catalog findings record planted
-    indicators but do **not** raise the threshold).
-  - `nlip_extension.py`: NLIP ingress SE records the user's text as the trusted task (egress closes the turn).
-  - `langchain_middleware.py`: `awrap_tool_call` adapter + `guard_tool_catalog`.
-  - Enabled by listing `tool_guard` in `config.toml` ingress/egress; options under
-    `[security_extensions.tool_guard.options]` (judge, threshold, scanner, catalog, catalog_judge, policy_rules, taint…).
-- `adversarial_tests/tool_guard_eval/`: harness. `cases.py` (dev = user tasks with number
-  divisible by 4, i.e. 10 tasks; test = the other 30; attacks: AgentDojo `important_instructions`, `tool_knowledge`,
-  `direct`, `ignore_previous`; ours: `judge_aware`, `tool_poisoning` (`<IMPORTANT>` block in
-  MCP descriptions), `tool_poisoning_plain` (plain sentence)), `run_evaluation.py` (replays
-  via an in-memory ASGI NLIP client to `POST /nlip`; resumable; errored episodes re-run),
-  `run_matrix.sh` (configs in sequence, models in parallel), `metrics.py`, `configs/*.toml`, `results/`.
-- `tests/`: 28 offline tests (`pytest`, no network needed).
+  - Backend, tools, tasks and checkers come from **AgentDojo `workspace` v1.2.2** (24 tools; user
+    Emma Johnson).
+  - Tools are served via an in-process **MCP** server (`mcp_server.py`).
+  - A LangChain `create_agent` (`agent.py`) has a model-call cap of 20 per turn.
+  - `nlip_agent.py` is the `NLIPServer`, with one backend and agent per NLIP session.
+  - `config.toml` enables extensions; Google sign-in is in `login.py`.
+- `security_extensions/tool_guard/`: **the security function**. See `WORKFLOW.md` (Mermaid,
+  final design + optional components).
+  - **Final design `d3_only`** (`configs/d3_only.toml`):
+    - validation (fail closed);
+    - the deployer's risk label from `policies/workspace.toml` (read-only → allow without d3;
+      unknown → block; side-effecting → judge);
+    - the d3 judge in `judges.py` ("would the user approve this exact call?", threshold 0.5, or 0.7
+      once tainted; evidence lines from earlier results);
+    - the d3-only scan in `scanner.py` (redacts the injected span, taints the session).
+  - **Optional, ablations only:** `catalog.py` (scans and pins tool descriptions), the regex rules
+    in `scanner.py`, and the policy blocking rules in `policy.py` (planted values, deletes without
+    user intent).
+  - **`config.toml` still defaults to `hybrid_d3_catalog`.** "Docs only" decision, 2026-10-27; the
+    docs say so and show the d3-only options.
+  - `nlip_extension.py`: an NLIP ingress SE that records the user's text as the trusted task (egress
+    closes the turn).
+  - `langchain_middleware.py`: the `awrap_tool_call` adapter + `guard_tool_catalog`.
+- `security_extensions/oauth_login/`: the `oauth_verify` ingress SE (Google ID tokens, Desktop +
+  Web client IDs; stub mode).
+- `adversarial_tests/tool_guard_eval/`: the harness.
+  - `cases.py`: dev = user tasks whose number is divisible by 4, i.e. 10 tasks; test = the other 30.
+  - Attacks: AgentDojo data attacks, `judge_aware`, `tool_poisoning`, `tool_poisoning_plain`,
+    `schema_poisoning[_tagged]`.
+  - `run_evaluation.py`: `--trace`, `--keys`, `--results-tag`; resumable; errored episodes re-run.
+  - Also: `run_matrix.sh`, `metrics.py` (`--by-goal`, `--layers`), `catalog_eval.py`,
+    `scanner_eval.py`, `tracing.py`, `export_explorer.py`, `configs/*.toml`, `data/`, `results/`.
+- `demo/`:
+  - `replay.py`: the terminal demo for graders, d3-only, 5 attacks + 1 benign;
+  - `web.py`: the web demo with the live full trace, plus `/runs` (browse saved episodes one by
+    one), `/how` and `/checks`.
+- `tests/`: 77 offline tests (`pytest`, no network needed).
 
-## Key findings so far (dev split)
-- Data-channel injections barely work on these models even **without** the guard
-  (`important_instructions`: 0% qwen / 0.8% gemma; other data attacks 0%).
-- **MCP tool-description poisoning works**: ASR without guard 14.3% qwen / 25.0% gemma (tagged),
-  2.9% / 6.4% (plain). This became the main threat evaluated.
-- Every guard config → **0% ASR** on both poisoning variants.
-  `policy_only` stops attacks but costs utility (10% benign false blocks, lower utility under attack).
-  `hybrid_d3` ≈ 99% / 89% utility under attack; **`hybrid_d3_catalog` → 100% / 100%**, 0 false
-  blocks, about 0.6 s guard time per episode (mostly the per-session catalog scan; could be cached).
-- **Final config: `hybrid_d3_catalog`** (decided with the user on 2026-10-25): catalog check =
-  prevention, call-level guard = backstop; the other configs are ablations.
+## Key findings (details in `adversarial_tests/tool_guard_eval/EXPERIMENTS.md`)
+- **Data-channel injections barely work on these models, even without the guard** (1 of 580 dev
+  episodes). MCP tool poisoning does work (test split, no guard):
+  - tagged: 11–13%;
+  - plain: 1–2%;
+  - parameter descriptions, tagged: 7–12%.
+- **Final `d3_only` (E17, test split, traced `d3final`):**
+  - **0/900 attack episodes succeeded; 0/60 benign false blocks;** ≈0.35 s and ≈3 d3 calls per
+    episode;
+  - of 69 cases that succeeded without the guard, the judge blocked 67 (P ≤ 0.026); in 2 the model
+    didn't act;
+  - cost of dropping the catalog check: task success under tagged poisoning is 87/85% vs 96/93%
+    for `hybrid_d3_catalog`;
+  - 4 false redactions (the agent's own sent email in `user_task_25`).
+- **Why no rules:**
+  - the regex rules match the attack templates themselves;
+  - the catalog check strips 42–80% of tricky legitimate docs (E15);
+  - d3 alone catches 91% of AgentDojo's data injections, missing `<INFORMATION>` in 3 calendar
+    events (E16).
+- **Decided with the user on 2026-10-26: final config `d3_only`.** Earlier configs (E11, E14) are
+  ablations.
 - Judge wording ("approve") was tuned on dev: benign 0.80–0.98 vs attacks ≤0.03 on d3-flash.
-
-**Full experiment history, results, failure analysis, and next steps:
-`adversarial_tests/tool_guard_eval/EXPERIMENTS.md`. Keep it updated after every run.**
-Known issue found in the test split: the guard reorders parallel side-effecting tool calls
-(each waits on its own judge call), which fails order-sensitive AgentDojo checkers
-(user_task_25). Planned fix: serialize guarded calls per session.
+- **Known issue:** the guard reorders parallel side-effecting tool calls (each waits on its own
+  judge call), which fails order-sensitive AgentDojo checkers (`user_task_25`). Planned fix:
+  serialize guarded calls per session.
 
 ## Current state / next steps
-- **Test-split run was launched** from the previous session (tag `test`; configs `none
-  hybrid_d3_catalog policy_only judge_only_d3 hybrid_d3 catalog_only_d3`; both models;
-  `--split test --attacks tool_poisoning,tool_poisoning_plain --sample 150 --seed 7`).
-  It may have been stopped when that session ended. Check `results/logs/test_*.log` and
-  `results/*__test.jsonl`; **re-running the same command resumes it**:
-  ```bash
-  adversarial_tests/tool_guard_eval/run_matrix.sh --tag test \
-    --configs "none hybrid_d3_catalog policy_only judge_only_d3 hybrid_d3 catalog_only_d3" \
-    --models "qwen-3.8-27b gemma-4-31b-it" -- --split test \
-    --attacks tool_poisoning,tool_poisoning_plain --sample 150 --seed 7
-  ```
-  Then `python -m adversarial_tests.tool_guard_eval.metrics adversarial_tests/tool_guard_eval/results/*__test.jsonl --by-attack`.
-- Remaining work, in rough priority order:
-  1. Finish the test-split run; commit the results.
-  2. Limitations probe (small): goal 13 (legitimate recipients, malicious content) and
-     poisoning inside `inputSchema` parameter descriptions (the catalog check does not read
-     those yet). Report what isn't caught.
-  3. Google OAuth login: login client that gets a Google ID token, sent as an NLIP
-     authentication token submessage; `oauth_verify` ingress SE; offline test mode. Needs
-     the user's Google Cloud OAuth client ID.
-  4. Demo script (`--stub` offline + live) and a recorded run.
-  5. Paper (5 pages ACM) and fresh-clone reproducibility check.
+- **Uncommitted since `d635d9f`:** probes, catalog/scanner evals, the d3-only config and final run,
+  tracing, the live trace, the run browser, the replay update, and these doc updates.
+- **Open, in rough priority order:**
+  1. Commit and push.
+  2. Serialize guarded calls per session, and retry d3 on 429/disconnects; measure with `d3_only`.
+  3. Optionally: scan only read-tool results (removes the false redactions), `judge_reads`, and
+     switching `config.toml` and demo "Guard On" to `d3_only` (pin the old defaults in ablation
+     configs first).
+  4. Paper (5 pages ACM; ECMA-434 §7.3.1 confirmed by the spec; check the other SCO numbers in the
+     standard).
+  5. Fresh-clone reproducibility check.
 
 ## Gotchas learned
 - The shell is zsh: no word-splitting of `$VAR` args (use `run_matrix.sh`), and there's no `timeout` command on macOS.

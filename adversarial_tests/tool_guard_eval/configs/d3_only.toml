@@ -1,0 +1,12 @@
+# d3 and nothing else: no policy rules, no regex rules, no catalog check.
+# Read-only tools run unchecked; every side-effecting call goes to the d3 judge, and every
+# tool result is scanned by the d3 injection detector alone.
+[options]
+catalog = "off"
+policy_rules = false
+judge = "d3"
+judge_model = "vllm-sr/d3-flash"
+scanner = "judge"
+taint = true
+threshold = 0.5
+tainted_threshold = 0.7
