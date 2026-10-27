@@ -29,8 +29,9 @@ from agentdojo.agent_pipeline.tool_execution import text_content_block_from_stri
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
-from adversarial_tests.tool_guard_eval.cases import POISONING, Case, plant
+from adversarial_tests.tool_guard_eval.cases import POISONING, SCHEMA_FALLBACK, SCHEMA_POISONING, Case, plant, plant_schemas
 from adversarial_tests.tool_guard_eval.run_evaluation import app_config, load_eval_config
+from adversarial_tests.tool_guard_eval.tracing import EpisodeTracer
 from agent_applications.workspace_assistant.environment import WorkspaceState, load_suite
 from agent_applications.workspace_assistant.nlip_agent import ENTITY_NAME, WorkspaceNLIPAgent
 from nlip_sdk import NLIPMessage
@@ -44,6 +45,8 @@ SCENARIOS = {
     "tool_poisoning": "Tool poisoning: hidden <IMPORTANT> block in tool descriptions",
     "tool_poisoning_plain": "Tool poisoning: one plain sentence in tool descriptions",
     "important_instructions": "Injected content: instructions planted in emails/files/events",
+    "schema_poisoning": "Tool poisoning: one sentence hidden in a tool's parameter description",
+    "schema_poisoning_tagged": "Tool poisoning: <IMPORTANT> block hidden in a tool's parameter description",
 }
 # Guard choice -> evaluation config in adversarial_tests/tool_guard_eval/configs/.
 GUARDS = {
@@ -53,6 +56,7 @@ GUARDS = {
     "policy_only": ("policy_only", "Ablation: policy rules only (no judge)"),
     "judge_only": ("judge_only_d3", "Ablation: judge only"),
     "hybrid_no_catalog": ("hybrid_d3", "Ablation: call-level guard, no catalog check"),
+    "d3_only": ("d3_only", "d3 only: judge + scanner, no rules, no policy, no catalog"),
 }
 # Preset AgentDojo user tasks (test split) with short titles for the page.
 PRESET_TASKS = {
@@ -227,8 +231,11 @@ class Run:
 
 
 class RunManager:
-    def __init__(self, *, offline: bool) -> None:
+    def __init__(self, *, offline: bool, signin: str | None = None) -> None:
         self.offline = offline
+        # Sign-in provider for oauth_verify: Google for the live web page; stub tokens offline
+        # and for the terminal replay (graders cannot use our Google test-user app).
+        self.signin = signin or ("stub" if offline else "google")
         self.suite = load_suite()
         self.runs: dict[str, Run] = {}
 
@@ -270,12 +277,20 @@ class RunManager:
         """What the attack changes, before anything runs: tool descriptions and planted data."""
         user_task, injection_task, attack = self._resolve(spec)
         injections, descriptions = self._plant(user_task, injection_task, attack, spec.model)
-        return self._changes(injections, descriptions)
+        return self._changes(injections, descriptions, self._schemas(user_task, injection_task, attack))
 
-    def _changes(self, injections: dict[str, str], descriptions: dict[str, str]) -> dict[str, Any]:
+    def _changes(
+        self, injections: dict[str, str], descriptions: dict[str, str], schemas: dict[str, dict[str, str]]
+    ) -> dict[str, Any]:
         originals = {tool.name: tool.description for tool in self.suite.tools}
+        params = {tool.name: tool.parameters.model_json_schema().get("properties", {}) for tool in self.suite.tools}
         defaults = self.suite.get_injection_vector_defaults()
         return {
+            "schemas": [
+                {"tool": tool, "param": param, "original": params[tool][param].get("description", ""), "poisoned": text}
+                for tool, by_param in schemas.items()
+                for param, text in by_param.items()
+            ],
             "tools": [
                 {"tool": name, "original": originals[name], "poisoned": text} for name, text in descriptions.items()
             ],
@@ -292,12 +307,15 @@ class RunManager:
             raise ValueError("enter a request or pick a preset task")
 
         injections, descriptions = self._plant(user_task, injection_task, attack, spec.model)
+        schemas = self._schemas(user_task, injection_task, attack)
         run_id = token_urlsafe(8)
         config = self._config(spec.guard, run_id)
         holder: dict[str, Any] = {}
 
         def state_factory() -> WorkspaceState:
-            state = WorkspaceState.create(injections, suite=self.suite, description_overrides=descriptions)
+            state = WorkspaceState.create(
+                injections, suite=self.suite, description_overrides=descriptions, schema_overrides=schemas
+            )
             if user_task is not None:
                 state.env = user_task.init_environment(state.env)
             holder["env"] = state.env.model_copy(deep=True)
@@ -307,18 +325,23 @@ class RunManager:
         if self.offline:
             chat_model_factory = self._scripted_factory(user_task, injection_task)
         emit_box: list[Run] = []
+        # Full trace, streamed live: model responses and every question the guard asks d3.
+        tracer = EpisodeTracer(on_event=lambda event: emit_box[0].emit({"type": "trace", **event}))
         server = WorkspaceNLIPAgent(
             config,
             state_factory=state_factory,
             model=spec.model,
             chat_model_factory=chat_model_factory,
-            extra_middleware=lambda: [ToolObserver(emit_box[0].emit)],
+            extra_middleware=lambda: [ToolObserver(emit_box[0].emit), *tracer.model_middleware()],
         )
         run = Run(run_id, spec, self.offline, prompt, server, user_task, injection_task, pre=holder)
         emit_box.append(run)
         _emitters[run_id] = run.emit
         if server.guard is not None:
-            self._instrument(server, run, prompt, injection_task)
+            self._instrument(server, run, prompt, injection_task, user_task)
+            judges = [server.guard.judge, server.guard.catalog.scanner.judge if server.guard.catalog else None]
+            for judge in {id(j): j for j in judges if j is not None}.values():  # each instance once
+                tracer.watch_judge(judge)
         run.emit(
             {
                 "type": "run",
@@ -334,7 +357,7 @@ class RunManager:
                 "goal": injection_task.GOAL if injection_task else None,
                 "poisoned_descriptions": descriptions,
                 "injections": injections,
-                "changes": self._changes(injections, descriptions),
+                "changes": self._changes(injections, descriptions, schemas),
             }
         )
         self.runs[run_id] = run
@@ -354,6 +377,15 @@ class RunManager:
             for tool in FREE_TEXT_POISONED_TOOLS
         }
 
+    def _schemas(self, user_task, injection_task, attack) -> dict[str, dict[str, str]]:
+        if attack not in SCHEMA_POISONING:
+            return {}
+        if user_task is not None:
+            return plant_schemas(Case(user_task.ID, injection_task.ID, attack), self.suite)
+        tool, param = SCHEMA_FALLBACK  # free text: the one tool every request is offered
+        original = next(t for t in self.suite.tools if t.name == tool).parameters.model_json_schema()["properties"][param]
+        return {tool: {param: SCHEMA_POISONING[attack].format(description=original.get("description", ""), goal=injection_task.GOAL)}}
+
     def _config(self, guard: str, run_id: str) -> dict[str, Any]:
         config = app_config(load_eval_config(GUARDS[guard][0]))
         security = config["entities"][ENTITY_NAME]["security"]
@@ -362,7 +394,7 @@ class RunManager:
             "entrypoint": "demo.runs:DemoObserver",
             "options": {"run_id": run_id},
         }
-        config["security_extensions"]["oauth_verify"]["options"]["provider"] = "stub" if self.offline else "google"
+        config["security_extensions"]["oauth_verify"]["options"]["provider"] = self.signin
         if self.offline:
             options = config["security_extensions"]["tool_guard"]["options"]
             for key in ("judge", "catalog_judge"):
@@ -370,11 +402,15 @@ class RunManager:
                     options[key] = "stub"
         return config
 
-    def _instrument(self, server: WorkspaceNLIPAgent, run: Run, prompt: str, injection_task) -> None:
+    def _instrument(self, server: WorkspaceNLIPAgent, run: Run, prompt: str, injection_task, user_task=None) -> None:
         guard = server.guard
         guard.audit = DemoAudit(run.emit)
         if self.offline:
-            judge = simulated_d3(prompt, injection_task.GOAL if injection_task else None)
+            attack_calls = []
+            if injection_task is not None:
+                env = (user_task.init_environment if user_task else (lambda e: e))(self.suite.load_and_inject_default_environment({}))
+                attack_calls = calls_from(injection_task.ground_truth(env))
+            judge = simulated_d3(prompt, injection_task.GOAL if injection_task else None, attack_calls)
             guard.judge = judge if guard.judge is not None else None
             for scanner in (guard.scanner, guard.catalog.scanner if guard.catalog else None):
                 if scanner is not None and scanner.judge is not None:

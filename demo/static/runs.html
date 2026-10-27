@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run Browser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-mode="viewer">
+  <header class="top">
+    <div class="brand"><span class="mark">◆</span> Tool Guard <span class="pill">Run browser</span></div>
+    <nav class="nav"><a href="/">Demo</a><a href="/runs" class="on">Runs</a><a href="/how">How it works</a><a href="/checks">Checks</a></nav>
+  </header>
+
+  <div class="runs-layout">
+    <aside class="card runs-side">
+      <label class="small muted" for="file">Results file</label>
+      <select id="file"></select>
+      <div id="counts" class="counts"></div>
+      <div class="filters">
+        <select id="f-attack"><option value="">All attacks</option></select>
+        <select id="f-outcome"><option value="">All outcomes</option></select>
+      </div>
+      <input id="f-text" class="search" placeholder="Filter by task or goal, e.g. user_task_25" autocomplete="off">
+      <div class="list-head small muted"><span id="shown"></span><button id="refresh" class="link small">Refresh</button></div>
+      <ol id="episodes" class="episodes"></ol>
+    </aside>
+
+    <main class="runs-main">
+      <section class="episode-bar card">
+        <div>
+          <div id="ep-title" class="ep-title muted">Pick an episode on the left</div>
+          <div id="ep-meta" class="small muted"></div>
+        </div>
+        <div class="player">
+          <button id="prev" class="btn" title="Previous (←)">◀</button>
+          <button id="replay-btn" class="btn" title="Replay step by step (space)">▶ Replay</button>
+          <button id="next" class="btn" title="Next (→)">▶</button>
+        </div>
+      </section>
+
+      <section class="context viewer-context">
+        <div class="persona">
+          <div class="avatar">EJ</div>
+          <div><div class="persona-name">Emma Johnson</div><div class="muted small">tools offered to the assistant</div></div>
+        </div>
+        <div id="tool-groups" class="groups"></div>
+      </section>
+      <div id="attack-banner" class="banner" hidden></div>
+
+      <div class="grid viewer-grid">
+        <section class="chat card"><div id="messages" class="messages"></div></section>
+        <aside class="activity card">
+          <div class="activity-head">
+            <h3>Guard activity</h3>
+            <div class="head-actions">
+              <label class="small trace-toggle"><input type="checkbox" id="show-trace" checked> Full trace</label>
+              <a id="export" class="link small" hidden></a>
+            </div>
+          </div>
+          <div id="outcome" class="outcome" hidden></div>
+          <ol id="steps" class="steps"></ol>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="tools-dialog">
+    <form method="dialog"><button class="x" aria-label="Close">×</button></form>
+    <div id="tools-body"></div>
+  </dialog>
+  <script src="/static/app.js"></script>
+  <script src="/static/runs.js"></script>
+</body>
+</html>

@@ -12,7 +12,7 @@
 <body>
   <header class="top">
     <div class="brand"><span class="mark">◆</span> Tool Guard <span id="mode" class="pill"></span></div>
-    <nav class="nav"><a href="/" class="on">Demo</a><a href="/how">How it works</a><a href="/checks">Checks</a></nav>
+    <nav class="nav"><a href="/" class="on">Demo</a><a href="/runs">Runs</a><a href="/how">How it works</a><a href="/checks">Checks</a></nav>
     <div class="account">
       <span id="who" class="who" hidden></span>
       <div id="google-button"></div>
@@ -53,7 +53,7 @@
       <summary title="Advanced">⋯</summary>
       <div class="menu">
         <label>Poisoning style
-          <select id="style"><option value="tool_poisoning">Hidden &lt;IMPORTANT&gt; block</option><option value="tool_poisoning_plain">One plain sentence</option></select>
+          <select id="style"><option value="tool_poisoning">Hidden &lt;IMPORTANT&gt; block</option><option value="tool_poisoning_plain">One plain sentence</option><option value="schema_poisoning">Hidden in a parameter description</option><option value="schema_poisoning_tagged">&lt;IMPORTANT&gt; block in a parameter description</option></select>
         </label>
         <label>Guard variant
           <select id="variant"></select>
@@ -89,7 +89,10 @@
     <aside class="activity card">
       <div class="activity-head">
         <h3>Guard activity</h3>
-        <a id="export" class="link small" hidden>Save run</a>
+        <div class="head-actions">
+          <label class="small trace-toggle"><input type="checkbox" id="show-trace" checked> Full trace</label>
+          <a id="export" class="link small" hidden>Save run</a>
+        </div>
       </div>
       <div id="outcome" class="outcome" hidden></div>
       <ol id="steps" class="steps"><li class="placeholder muted">Checks appear here as the assistant works.</li></ol>
