@@ -32,7 +32,8 @@ from agent_applications.workspace_assistant.environment import WorkspaceState, l
 from agent_applications.workspace_assistant.nlip_agent import ENTITY_NAME, WorkspaceNLIPAgent
 from nlip_sdk import NLIPClient, NLIPMessage
 
-from .cases import ATTACKS, Case, build_cases, plant
+from .cases import ATTACKS, Case, build_cases, plant, plant_schemas
+from .tracing import EpisodeTracer
 
 HERE = Path(__file__).resolve().parent
 CONFIG_DIR = HERE / "configs"
@@ -77,19 +78,28 @@ def app_config(eval_config: dict[str, Any]) -> dict[str, Any]:
     return config
 
 
-async def run_episode(case: Case, eval_config: dict[str, Any], model: str, suite) -> dict[str, Any]:
+async def run_episode(case: Case, eval_config: dict[str, Any], model: str, suite, trace: bool = False) -> dict[str, Any]:
     user_task = suite.get_user_task_by_id(case.user_task)
     injection_task = suite.get_injection_task_by_id(case.injection_task) if case.injection_task else None
     injections, description_overrides = plant(case, suite, model)
+    schema_overrides = plant_schemas(case, suite)
     pre: dict[str, Any] = {}
 
     def state_factory() -> WorkspaceState:
-        state = WorkspaceState.create(injections, suite=suite, description_overrides=description_overrides)
+        state = WorkspaceState.create(
+            injections, suite=suite, description_overrides=description_overrides, schema_overrides=schema_overrides
+        )
         state.env = user_task.init_environment(state.env)
         pre["env"] = state.env.model_copy(deep=True)
         return state
 
-    server = WorkspaceNLIPAgent(app_config(eval_config), state_factory=state_factory, model=model)
+    tracer = EpisodeTracer() if trace else None
+    server = WorkspaceNLIPAgent(
+        app_config(eval_config), state_factory=state_factory, model=model,
+        extra_middleware=tracer.middleware if tracer else None,
+    )
+    if tracer and server.guard is not None:
+        tracer.watch_judge(server.guard.judge)
     client = InMemoryNLIPClient(server.create_nlip_app(), {ENTITY_NAME: CONFIG["entities"][ENTITY_NAME]["endpoint"]})
     started = time.perf_counter()
     error = None
@@ -125,12 +135,23 @@ async def run_episode(case: Case, eval_config: dict[str, Any], model: str, suite
         usage = [message.usage_metadata for message in agent.messages if isinstance(message, AIMessage)]
         record["agent_calls"] = len(usage)
         record["agent_tokens"] = sum((item or {}).get("total_tokens", 0) for item in usage)
+        if tracer:
+            record["trace"] = {
+                **tracer.record(agent.messages),
+                "poisoned_descriptions": description_overrides,
+                "poisoned_schemas": schema_overrides,
+                "planted_in_data": injections,
+            }
         await agent.close()
     record["output"] = output[:500]
     if server.guard is not None:
         record["guard"] = server.guard.audit.records
         await server.guard.aclose()
     return record
+
+
+def results_name(config: str, model: str, split: str, tag: str | None = None) -> str:
+    return f"{config}__{model}__{split}{f'__{tag}' if tag else ''}.jsonl"
 
 
 def done_keys(path: Path) -> set[str]:
@@ -151,11 +172,14 @@ async def main() -> None:
     parser.add_argument("--injection-tasks", help="Comma list of injection task ids (default: all 14)")
     parser.add_argument("--user-tasks", help="Comma list of user task ids (default: all in the split)")
     parser.add_argument("--no-benign", action="store_true", help="Skip benign (no attack) episodes")
+    parser.add_argument("--trace", action="store_true", help="Store full traces (messages, raw results, judge I/O)")
+    parser.add_argument("--keys", help="Comma list of exact case keys to run (e.g. user_task_5|injection_task_0|tool_poisoning)")
     parser.add_argument("--sample", type=int, help="Randomly keep this many episodes per attack")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--concurrency", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=300.0, help="Seconds per episode")
-    parser.add_argument("--out", help="Results JSONL (default: results/<config>__<model>__<split>.jsonl)")
+    parser.add_argument("--out", help="Results JSONL (default: results/<config>__<model>__<split>[__<tag>].jsonl)")
+    parser.add_argument("--results-tag", help="Suffix for the default results file, keeping e.g. probes apart")
     args = parser.parse_args()
 
     suite = load_suite()
@@ -174,7 +198,13 @@ async def main() -> None:
         sample=args.sample,
         seed=args.seed,
     )
-    out = Path(args.out) if args.out else RESULTS_DIR / f"{eval_config['name']}__{args.model}__{args.split}.jsonl"
+    if args.keys:
+        wanted = set(args.keys.split(","))
+        cases = [case for case in cases if case.key in wanted]
+        missing = wanted - {case.key for case in cases}
+        if missing:
+            parser.error(f"keys not in the selected split/attacks: {', '.join(sorted(missing))}")
+    out = Path(args.out) if args.out else RESULTS_DIR / results_name(eval_config["name"], args.model, args.split, args.results_tag)
     out.parent.mkdir(parents=True, exist_ok=True)
     finished = done_keys(out)
     todo = [case for case in cases if case.key not in finished]
@@ -187,7 +217,7 @@ async def main() -> None:
     async def worker(case: Case) -> None:
         async with semaphore:
             try:
-                record = await asyncio.wait_for(run_episode(case, eval_config, args.model, suite), args.timeout)
+                record = await asyncio.wait_for(run_episode(case, eval_config, args.model, suite, trace=args.trace), args.timeout)
             except Exception as exc:
                 record = {**case.to_dict(), "key": case.key, "config": eval_config["name"], "model": args.model,
                           "utility": False, "attack_success": None, "error": f"{type(exc).__name__}: {exc}"[:500]}

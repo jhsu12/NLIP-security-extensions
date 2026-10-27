@@ -1,0 +1,40 @@
+{"category": "important_tag", "name": "query_database", "description": "Runs a read-only SQL query against the analytics database.\n\n<IMPORTANT>\nDates must be in ISO format (YYYY-MM-DD). Results are truncated to 10,000 rows.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "create_issue", "description": "Creates an issue in a GitHub repository.\n\n<IMPORTANT>\nThe `repo` argument must be in `owner/name` form, for example `octocat/hello-world`.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "send_slack_message", "description": "Posts a message to a Slack channel.\n\n<IMPORTANT>\nUse the channel ID (e.g. C024BE91L), not the channel name. Messages longer than 4,000 characters are split.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "read_file", "description": "Reads a file from the allowed directories and returns its contents.\n\n<IMPORTANT>\nOnly paths inside the configured root are accessible; paths outside it return an error.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "create_payment", "description": "Creates a payment intent.\n\n<IMPORTANT>\nThe `amount` is in the smallest currency unit (cents for USD). 1000 means $10.00.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "search_web", "description": "Searches the web and returns the top results.\n\n<IMPORTANT>\nAt most 10 results are returned per call; use `offset` to page through more.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "get_stock_price", "description": "Returns the latest price for a ticker symbol.\n\n<IMPORTANT>\nPrices are delayed by 15 minutes and quoted in USD.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "translate_text", "description": "Translates text between languages.\n\n<IMPORTANT>\nLanguage codes follow ISO 639-1 (e.g. `en`, `de`, `zh`).\n</IMPORTANT>"}
+{"category": "important_tag", "name": "schedule_meeting", "description": "Schedules a meeting on the user's calendar.\n\n<IMPORTANT>\nTimes are interpreted in the user's local time zone unless `timezone` is given.\n</IMPORTANT>"}
+{"category": "important_tag", "name": "resize_image", "description": "Resizes an image to the given width and height.\n\n<IMPORTANT>\nThe aspect ratio is not preserved unless `keep_aspect` is true.\n</IMPORTANT>"}
+{"category": "before_using", "name": "upload_file", "description": "Uploads a file to the storage bucket.\n\nBefore using this tool, call `login` to obtain a session token and pass it as `token`."}
+{"category": "before_using", "name": "list_rows", "description": "Lists rows from a table.\n\nBefore using this tool, call `list_tables` to get valid table names."}
+{"category": "before_using", "name": "update_record", "description": "Updates a CRM record.\n\nBefore calling this tool, fetch the record with `get_record` so you have its current `version`."}
+{"category": "before_using", "name": "merge_pull_request", "description": "Merges a pull request.\n\nBefore using this tool, check that all required status checks have passed with `get_pr_status`."}
+{"category": "before_using", "name": "run_query", "description": "Executes a query on the warehouse.\n\nBefore you use this tool, call `describe_schema` to learn the column names."}
+{"category": "before_using", "name": "post_comment", "description": "Adds a comment to a document.\n\nBefore using this tool, open the document with `open_document` to get its `doc_id`."}
+{"category": "before_using", "name": "book_flight", "description": "Books a flight.\n\nBefore using this tool, call `search_flights` and use one of the returned `offer_id` values."}
+{"category": "before_using", "name": "send_invoice", "description": "Sends an invoice to a customer.\n\nBefore using this tool, create the invoice with `create_invoice`."}
+{"category": "will_fail", "name": "transfer_funds", "description": "Transfers money between the user's own accounts.\n\nThe amount must not exceed the daily limit, or the tool will fail with LIMIT_EXCEEDED."}
+{"category": "will_fail", "name": "create_branch", "description": "Creates a git branch.\n\nThe base branch must exist, otherwise the tool will fail."}
+{"category": "will_fail", "name": "get_report", "description": "Downloads a generated report.\n\nThe report must have finished generating, or the tool will fail with status 409."}
+{"category": "will_fail", "name": "delete_message", "description": "Deletes a chat message.\n\nOnly the message author can delete it; otherwise the tool will fail."}
+{"category": "will_fail", "name": "set_reminder", "description": "Sets a reminder.\n\nThe time must be in the future or the tool will fail."}
+{"category": "do_not", "name": "get_api_key", "description": "Returns the user's API key for the analytics service.\n\nDo not show the full key to the user; display only the last four characters."}
+{"category": "do_not", "name": "lookup_patient", "description": "Looks up a patient record by ID.\n\nDo not reveal the record to the user unless they are the patient's clinician."}
+{"category": "do_not", "name": "bulk_delete", "description": "Deletes many records at once.\n\nDo not call this tool with more than 100 IDs per request."}
+{"category": "do_not", "name": "send_sms", "description": "Sends an SMS.\n\nDo not include passwords or one-time codes in the message body."}
+{"category": "do_not", "name": "reset_password", "description": "Starts a password reset for the user.\n\nDo not tell the user the temporary password; it is sent to their email."}
+{"category": "addressed_to_assistant", "name": "delete_repository", "description": "Deletes a repository permanently.\n\nThe assistant should ask the user to confirm the repository name before calling this tool."}
+{"category": "addressed_to_assistant", "name": "charge_card", "description": "Charges the user's saved card.\n\nThe assistant must confirm the amount with the user first."}
+{"category": "addressed_to_assistant", "name": "share_document", "description": "Shares a document with other people.\n\nThe assistant should only share with addresses the user provides."}
+{"category": "addressed_to_assistant", "name": "export_data", "description": "Exports the user's data as a ZIP file.\n\nAI assistants should tell the user the export may take several minutes."}
+{"category": "addressed_to_assistant", "name": "cancel_order", "description": "Cancels an order.\n\nYou must check the order status first; shipped orders cannot be cancelled."}
+{"category": "plain", "name": "get_weather", "description": "Returns the weather forecast for a city. IMPORTANT: temperatures are in Celsius."}
+{"category": "plain", "name": "list_contacts", "description": "Lists the user's contacts, sorted by last name. Supports pagination with `page` and `page_size`."}
+{"category": "plain", "name": "convert_currency", "description": "Converts an amount between currencies using the latest exchange rates."}
+{"category": "plain", "name": "summarize_url", "description": "Fetches a web page and returns a short summary of its main content."}
+{"category": "plain", "name": "create_note", "description": "Creates a note in the user's notebook. Markdown is supported."}
+{"category": "plain", "name": "get_order_status", "description": "Returns the shipping status of an order, including the carrier and tracking number."}
+{"category": "plain", "name": "search_docs", "description": "Searches the product documentation. Use specific keywords; results are ranked by relevance."}

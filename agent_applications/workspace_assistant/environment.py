@@ -7,6 +7,7 @@ from the model's text.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -44,6 +45,8 @@ class WorkspaceState:
     suite: TaskSuite
     env: Any
     description_overrides: dict[str, str] = field(default_factory=dict)
+    # tool -> parameter -> description: poisoning inside the MCP inputSchema.
+    schema_overrides: dict[str, dict[str, str]] = field(default_factory=dict)
     executed: list[FunctionCall] = field(default_factory=list)
 
     @classmethod
@@ -53,11 +56,13 @@ class WorkspaceState:
         *,
         suite: TaskSuite | None = None,
         description_overrides: Mapping[str, str] | None = None,
+        schema_overrides: Mapping[str, Mapping[str, str]] | None = None,
     ) -> "WorkspaceState":
         """Load the seeded environment, optionally with attacker text at injection vectors."""
         suite = suite or load_suite()
         env = suite.load_and_inject_default_environment(dict(injections or {}))
-        return cls(suite, env, dict(description_overrides or {}))
+        schemas = {tool: dict(params) for tool, params in (schema_overrides or {}).items()}
+        return cls(suite, env, dict(description_overrides or {}), schemas)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [
@@ -65,10 +70,16 @@ class WorkspaceState:
                 name=function.name,
                 # A poisoned or rug-pulled MCP server is modelled by overriding descriptions.
                 description=self.description_overrides.get(function.name, function.description),
-                input_schema=function.parameters.model_json_schema(),
+                input_schema=self._input_schema(function),
             )
             for function in self.suite.tools
         ]
+
+    def _input_schema(self, function) -> dict[str, Any]:
+        schema = copy.deepcopy(function.parameters.model_json_schema())
+        for param, text in self.schema_overrides.get(function.name, {}).items():
+            schema["properties"][param]["description"] = text
+        return schema
 
     def run(self, name: str, arguments: Mapping[str, Any]) -> tuple[str, str | None]:
         """Execute one tool against the environment; return (result text, error)."""

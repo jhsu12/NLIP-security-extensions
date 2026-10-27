@@ -2,6 +2,7 @@
 
     python -m adversarial_tests.tool_guard_eval.metrics results/*.jsonl
     python -m adversarial_tests.tool_guard_eval.metrics results/*.jsonl --by-attack --csv summary.csv
+    python -m adversarial_tests.tool_guard_eval.metrics results/*__probe.jsonl --by-goal --layers
 
 Per (config, model):
   benign utility        user tasks solved with no attack present
@@ -10,6 +11,8 @@ Per (config, model):
   false-block rate      benign episodes in which the guard blocked at least one call
   guard ms / episode    time spent inside the guard (judge calls included)
   judge calls, tokens   per episode, from the guard's audit records
+  --layers              episodes in which each layer acted: catalog strip, L1 policy block,
+                        L2 judge block, post-tool redaction
 """
 
 from __future__ import annotations
@@ -43,6 +46,10 @@ def guard_stats(record: dict[str, Any]) -> dict[str, float]:
     audit = [entry for entry in record.get("guard", []) if entry.get("point") in ("pre_tool", "post_tool", "catalog")]
     return {
         "blocks": sum(1 for entry in audit if entry["point"] == "pre_tool" and entry["action"] == "block"),
+        "policy_blocks": sum(
+            1 for e in audit if e["point"] == "pre_tool" and e["action"] == "block" and e.get("layer") in ("policy", "validation")
+        ),
+        "judge_blocks": sum(1 for e in audit if e["point"] == "pre_tool" and e["action"] == "block" and e.get("layer") == "judge"),
         "redactions": sum(1 for entry in audit if entry["point"] == "post_tool" and entry["action"] == "replace"),
         "catalog_changes": sum(len(entry.get("tools", {})) for entry in audit if entry["point"] == "catalog"),
         "guard_ms": sum(entry.get("latency_ms", 0.0) for entry in audit),
@@ -55,10 +62,14 @@ def rate(values: list[bool]) -> str:
     return f"{100 * sum(values) / len(values):.1f}% ({sum(values)}/{len(values)})" if values else "-"
 
 
-def summarize(records: list[dict[str, Any]], by_attack: bool) -> list[dict[str, Any]]:
+def summarize(
+    records: list[dict[str, Any]], by_attack: bool, *, by_goal: bool = False, layers: bool = False
+) -> list[dict[str, Any]]:
     groups: dict[tuple, list[dict[str, Any]]] = defaultdict(list)
     for record in records:
-        key = (record["config"], record["model"]) + ((record.get("attack") or "benign",) if by_attack else ())
+        key = (record["config"], record["model"])
+        key += (record.get("attack") or "benign",) if by_attack else ()
+        key += (record.get("injection_task") or "-",) if by_goal else ()
         groups[key].append(record)
 
     rows = []
@@ -73,6 +84,7 @@ def summarize(records: list[dict[str, Any]], by_attack: bool) -> list[dict[str, 
                 "config": key[0],
                 "model": key[1],
                 **({"attack": key[2]} if by_attack else {}),
+                **({"goal": key[-1]} if by_goal else {}),
                 "episodes": len(group),
                 "errors": sum(1 for r in all_records if r.get("error")),
                 "benign_utility": rate([r["utility"] for r in benign]),
@@ -84,9 +96,21 @@ def summarize(records: list[dict[str, Any]], by_attack: bool) -> list[dict[str, 
                 "judge_tokens_mean": f"{mean(s['judge_tokens'] for s in stats):.0f}" if stats else "-",
                 "agent_tokens_mean": f"{mean(r.get('agent_tokens', 0) for r in group):.0f}",
                 "wall_s_median": f"{median(r.get('wall_s', 0) for r in group):.1f}",
+                **(layer_columns(stats) if layers else {}),
             }
         )
     return rows
+
+
+def layer_columns(stats: list[dict[str, float]]) -> dict[str, str]:
+    """How many episodes each guard layer acted in (an episode can count for several)."""
+    acted = lambda name: rate([s[name] > 0 for s in stats])  # noqa: E731
+    return {
+        "catalog_strip": acted("catalog_changes"),
+        "policy_block": acted("policy_blocks"),
+        "judge_block": acted("judge_blocks"),
+        "redaction": acted("redactions"),
+    }
 
 
 def markdown(rows: list[dict[str, Any]]) -> str:
@@ -102,10 +126,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("results", nargs="+", help="Results JSONL files")
     parser.add_argument("--by-attack", action="store_true", help="Break rows down by attack type")
+    parser.add_argument("--by-goal", action="store_true", help="Break rows down by attacker goal (injection task)")
+    parser.add_argument("--layers", action="store_true", help="Add columns for which guard layer acted")
     parser.add_argument("--csv", help="Also write the table to this CSV file")
     args = parser.parse_args()
 
-    rows = summarize(load(args.results), args.by_attack)
+    rows = summarize(load(args.results), args.by_attack, by_goal=args.by_goal, layers=args.layers)
     print(markdown(rows))
     if args.csv and rows:
         with open(args.csv, "w", newline="", encoding="utf-8") as csv_file:

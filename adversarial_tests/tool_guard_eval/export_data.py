@@ -5,22 +5,25 @@ exactly what it builds, so the benign traffic and every attack case can be read 
 reviewed without running anything:
 
     python -m adversarial_tests.tool_guard_eval.export_data
+    python -m adversarial_tests.tool_guard_eval.export_data --attacks schema_poisoning
 
 Output:
     data/user_tasks.jsonl         the 40 benign user tasks (prompt, split, expected tool calls)
     data/injection_tasks.jsonl    the 14 attacker goals
     data/attacks/<attack>.jsonl   one line per (user task, attacker goal): the exact text
-                                  planted in tool data and/or tool descriptions
+                                  planted in tool data, tool descriptions, or (for
+                                  schema_poisoning) tool parameter descriptions
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
 from agent_applications.workspace_assistant.environment import SUITE_VERSION, load_suite
 
-from .cases import ATTACKS, Case, _number, plant, split_of
+from .cases import ATTACKS, Case, _number, plant, plant_schemas, split_of
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 # Attacks address the model by name; the exported text uses the default agent's name.
@@ -35,6 +38,10 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--attacks", help=f"Comma list of attacks to write (default: all of {', '.join(ATTACKS)})")
+    args = parser.parse_args()
+    attacks = args.attacks.split(",") if args.attacks else list(ATTACKS)
     suite = load_suite()
     user_ids = sorted(suite.user_tasks, key=_number)
     injection_ids = sorted(suite.injection_tasks, key=_number)
@@ -67,28 +74,30 @@ def main() -> None:
         ],
     )
 
-    for attack in ATTACKS:
+    for attack in attacks:
         rows = []
         for user_id in user_ids:
             for injection_id in injection_ids:
                 case = Case(user_id, injection_id, attack)
                 injections, overrides = plant(case, suite, AGENT_MODEL)
-                rows.append(
-                    {
-                        "key": case.key,
-                        "split": split_of(user_id),
-                        "user_task": user_id,
-                        "injection_task": injection_id,
-                        "attack": attack,
-                        "planted_in_tool_data": injections,
-                        "planted_in_tool_descriptions": overrides,
-                    }
-                )
+                row = {
+                    "key": case.key,
+                    "split": split_of(user_id),
+                    "user_task": user_id,
+                    "injection_task": injection_id,
+                    "attack": attack,
+                    "planted_in_tool_data": injections,
+                    "planted_in_tool_descriptions": overrides,
+                }
+                schemas = plant_schemas(case, suite)
+                if schemas:
+                    row["planted_in_tool_schemas"] = schemas  # tool -> parameter -> description
+                rows.append(row)
         write_jsonl(DATA_DIR / "attacks" / f"{attack}.jsonl", rows)
 
     print(
         f"AgentDojo workspace {SUITE_VERSION}: {len(users)} user tasks, {len(injection_ids)} goals, "
-        f"{len(ATTACKS)} attacks x {len(user_ids) * len(injection_ids)} cases -> {DATA_DIR}"
+        f"{len(attacks)} attacks x {len(user_ids) * len(injection_ids)} cases -> {DATA_DIR}"
     )
 
 
