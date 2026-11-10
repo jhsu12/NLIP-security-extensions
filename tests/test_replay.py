@@ -6,7 +6,7 @@ import io
 import httpx
 
 from demo.replay import GUARD_ON, SCENARIOS, Printer, replay
-from demo.runs import RunManager
+from demo.runs import ATTACK_EXAMPLES, GUARDS, RunManager
 from demo.web import create_app
 
 
@@ -25,13 +25,13 @@ def test_offline_replay_shows_each_attack_launched_then_stopped_by_d3() -> None:
         assert set(on.caught_by) == {scenario.expected}, (scenario.title, on.caught_by)
     text = out.getvalue()
     assert text.count("planted text matches the submitted test data") == len(SCENARIOS)
-    assert "| 3 | important_instructions | attack succeeded | blocked | post-tool d3 scan | yes |" in text
-    assert "| 6 | benign | allowed | allowed | – | yes |" in text
+    assert "| 6 | important_instructions | Invite the attacker to a meeting | attack succeeded | blocked | post-tool d3 scan | yes |" in text
+    assert "| 7 | benign | – | allowed | allowed | – | yes |" in text
 
 
 def test_narration_follows_the_request_through_every_check_in_order() -> None:
     out = io.StringIO()
-    asyncio.run(replay([SCENARIOS[3]], offline=True, printer=Printer(out, color=False)))
+    asyncio.run(replay([SCENARIOS[0]], offline=True, printer=Printer(out, color=False)))
     guard_on = out.getvalue().split("── Guard ON")[1]
     steps = ["NLIP      POST /nlip", "MCP       tools/list", "sign-in   oauth_verify",
              "guard     trusted task", "pre-tool  send_email", "BLOCKED by d3 judge", "post-tool", "reply", "RESULT"]
@@ -39,9 +39,11 @@ def test_narration_follows_the_request_through_every_check_in_order() -> None:
     assert positions == sorted(positions)
 
 
-def test_scenarios_use_test_split_cases_and_the_final_design() -> None:
-    assert all(int(s.task_id.rsplit("_", 1)[1]) % 4 for s in SCENARIOS)  # dev = task number divisible by 4
-    assert GUARD_ON == "d3_only"
+def test_scenarios_are_the_web_demo_examples_and_the_final_design() -> None:
+    attacks = [(s.task_id, s.goal_id, s.attack) for s in SCENARIOS if s.goal_id]
+    assert attacks == [(x["task_id"], x["goal_id"], x["attack"]) for x in ATTACK_EXAMPLES]
+    assert [s.number for s in SCENARIOS] == list(range(1, len(ATTACK_EXAMPLES) + 2))
+    assert GUARDS[GUARD_ON][0] == "d3_only"
 
 
 def test_replay_uses_stub_sign_in_even_with_live_models() -> None:

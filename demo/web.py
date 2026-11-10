@@ -39,6 +39,15 @@ def create_app(*, offline: bool, signin: str | None = None) -> FastAPI:
     app = FastAPI(title="Tool guard demo")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
+    @app.middleware("http")
+    async def revalidate_pages(request: Request, call_next):
+        # Pages and scripts change between demo versions; make browsers check for a newer copy
+        # (an unchanged file still comes back as a cheap 304).
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
     def get_run(run_id: str):
         run = manager.runs.get(run_id)
         if run is None:

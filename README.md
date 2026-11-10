@@ -31,12 +31,13 @@ Python 3.11 or newer:
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[workspace,test]'
 pytest                                   # 77 offline tests, no network or keys needed
-python -m demo.replay --stub             # terminal demo: 5 attacks + 1 normal request, guard off vs on
+python -m demo.replay --stub             # terminal demo: 6 attacks + 1 normal request, guard off vs on
 python -m demo.web --stub                # web demo → http://127.0.0.1:8030 (runs browser at /runs)
 ```
 
-`demo.replay` is the demo for graders. It replays five attack cases and one normal request from
-the test data against the NLIP endpoint, with the d3-only guard, and narrates every check. The web
+`demo.replay` is the demo for graders. It replays the web demo's six "Show me an attack" cases and
+one normal request against the NLIP endpoint, guard off and then on (d3 only), and narrates every
+check. The web
 demo's `/runs` page lets you step through every saved evaluation episode with its full trace. See
 [`demo/README.md`](demo/README.md).
 
@@ -53,13 +54,9 @@ python -m agent_applications.workspace_assistant.chat_client    # … and termin
 ### Running the final design
 
 The final design is the evaluation config
-[`configs/d3_only.toml`](adversarial_tests/tool_guard_eval/configs/d3_only.toml) (`--config d3_only`),
-and `demo.replay` uses it.
-
-**Note:** the application's own default
-[`config.toml`](agent_applications/workspace_assistant/config.toml) still enables the earlier
-`hybrid_d3_catalog` setup. So does the web demo's **Guard On**; d3-only is under **⋯ → Guard
-variant**. To run the app itself with the final design, set these options under
+[`configs/d3_only.toml`](adversarial_tests/tool_guard_eval/configs/d3_only.toml) (`--config d3_only`).
+The application's default [`config.toml`](agent_applications/workspace_assistant/config.toml),
+`demo.replay` and the web demo's **Guard On** all use it. Its options under
 `[security_extensions.tool_guard.options]`:
 
 ```toml
@@ -68,6 +65,9 @@ judge = "d3"
 scanner = "judge"      # d3 scan of tool results, no regex rules
 catalog = "off"        # no tool-description check
 ```
+
+The earlier `hybrid_d3_catalog` design sets `policy_rules = true`, `scanner = "rules+judge"` and
+`catalog = "rules+judge"`. It is under **⋯ → Guard variant** in the web demo.
 
 ## How a request flows
 

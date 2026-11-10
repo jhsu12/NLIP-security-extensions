@@ -16,6 +16,7 @@ from typing import Any
 from adversarial_tests.tool_guard_eval.export_explorer import _fields, _norm
 from adversarial_tests.tool_guard_eval.run_evaluation import RESULTS_DIR
 
+from .checks import check_details
 from .runs import GUARDS, SCENARIOS, RunManager
 
 OUTCOMES = ("attack succeeded", "attack stopped by guard", "model ignored attack",
@@ -144,8 +145,11 @@ def to_events(record: dict[str, Any], manager: RunManager) -> list[dict[str, Any
     reply = next((m.get("content") for m in reversed(trace.get("messages", [])) if m["role"] == "assistant" and m.get("content")),
                  record.get("output", ""))
     events.append({"type": "reply", "text": reply, "t": record.get("wall_s")})
+    # Saved episodes don't keep the account state, so the pop-up shows the checker without a diff.
+    checks = {"utility": check_details(task), "attack": check_details(goal) if goal else None}
     events.append({"type": "outcome", "utility": record.get("utility"), "attack_success": record.get("attack_success"),
-                   "executed": record.get("executed", []), "t": record.get("wall_s")})
+                   "executed": record.get("executed", []), "checks": checks, "changes": None, "reply": reply,
+                   "t": record.get("wall_s")})
     for seq, event in enumerate(events):
         event["seq"] = seq
     return events

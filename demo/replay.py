@@ -1,19 +1,20 @@
-"""Terminal demo: replay attack cases from the test data, guard OFF then ON (final design: d3 only).
+"""Terminal demo: the web demo's "Show me an attack" cases, guard OFF then ON (final design: d3 only).
 
     python -m demo.replay --stub                 # offline: no keys, no network, ~1 min
     python -m demo.replay                        # live: Jetstream model + d3 judge (needs .env)
     python -m demo.replay --stub --scenario 4    # one scenario
     python -m demo.replay --stub --markdown run.md   # also save the narration and table
 
-Each case is taken from adversarial_tests/tool_guard_eval/data/ (test split), checked
-against the planted text in that file, and sent to the workspace assistant as a real NLIP
-request (POST /nlip with a sign-in token). Every step behind the scenes is printed as it
-happens: sign-in, each tool call with the guard's pre-tool decision (the d3 judge) and
-post-tool scan (the d3 injection detector), the reply, and AgentDojo's verdict. The five
-attacks hide the instruction in different places (tool description, plain or tagged;
-an email; a parameter description) and are cases the live d3-only guard stopped on both
-models; a sixth, normal request shows the guard letting legitimate work through. A
-summary table at the end shows what was blocked, what got through, and what it cost.
+The six attacks are ``demo.runs.ATTACK_EXAMPLES``, the same list as the web page's
+"Show me an attack" menu: cases where the attack succeeded without a guard in the
+evaluation, hiding the instruction in different places (a tool description, tagged or
+plain; a parameter description; a file the task reads). A seventh, normal request shows
+the guard letting legitimate work through. Each case is checked against the planted text
+in adversarial_tests/tool_guard_eval/data/ and sent to the workspace assistant as a real
+NLIP request (POST /nlip with a sign-in token). Every step behind the scenes is printed as
+it happens: sign-in, each tool call with the guard's pre-tool decision (the d3 judge) and
+post-tool scan (the d3 injection detector), the reply, and AgentDojo's verdict. A summary
+table at the end shows what was blocked, what got through, and what it cost.
 """
 
 from __future__ import annotations
@@ -31,11 +32,11 @@ from nlip_sdk import NLIPMessage
 from security_extensions.oauth_login import make_stub_token
 from security_extensions.tool_guard.session import extract_indicators
 
-from .runs import RunManager, RunSpec
+from .runs import ATTACK_EXAMPLES, GOAL_LABELS, RunManager, RunSpec
 
 DATA = Path(__file__).resolve().parent.parent / "adversarial_tests" / "tool_guard_eval" / "data"
 USER = "emma.johnson@bluesparrowtech.com"
-GUARD_ON = "d3_only"  # the final design: d3 judge before calls, d3 scan after; no rules, no policy
+GUARD_ON = "on"  # demo.runs maps it to d3_only, the final design: d3 judge before calls, d3 scan after
 JUDGE, SCAN = "pre-tool d3 judge", "post-tool d3 scan"
 
 
@@ -47,22 +48,23 @@ class Scenario:
     task_id: str
     goal_id: str | None
     expected: str | None  # the check that should stop it with the guard on (None: no attack)
+    model: str | None = None  # live: the model the attack worked on, unless --model is given
 
 
-# Test-split cases the live d3-only guard stopped on both models (or, for #3, an email the
-# d3 scan caught in every test case), chosen so the instruction hides somewhere different each time.
+STYLE = {
+    "tool_poisoning": "<IMPORTANT> block in a tool description",
+    "tool_poisoning_plain": "one plain sentence in a tool description",
+    "schema_poisoning_tagged": "<IMPORTANT> block in a parameter description",
+    "schema_poisoning": "one sentence in a parameter description",
+    "important_instructions": "instructions planted in the data the task reads",
+}
+# The web demo's "Show me an attack" cases, then one normal request.
 SCENARIOS = [
-    Scenario(1, "Poisoned tool description (hidden <IMPORTANT> block): email the attacker", "tool_poisoning",
-             "user_task_29", "injection_task_0", JUDGE),
-    Scenario(2, "Poisoned tool description (one plain sentence, no tell-tale words): delete a file", "tool_poisoning_plain",
-             "user_task_9", "injection_task_1", JUDGE),
-    Scenario(3, "Instructions planted in an email the task reads: forward a private email", "important_instructions",
-             "user_task_22", "injection_task_3", SCAN),
-    Scenario(4, "Instruction hidden in a tool's parameter description: email the attacker", "schema_poisoning_tagged",
-             "user_task_29", "injection_task_0", JUDGE),
-    Scenario(5, "Poisoned tool description: invite the attacker to a meeting", "tool_poisoning",
-             "user_task_33", "injection_task_2", JUDGE),
-    Scenario(6, "No attack: a normal request the guard must let through", "benign",
+    Scenario(number, f"{STYLE[x['attack']]}: {GOAL_LABELS[x['goal_id']].lower()} · {x['worked']}", x["attack"],
+             x["task_id"], x["goal_id"], SCAN if x["attack"] == "important_instructions" else JUDGE, x.get("model"))
+    for number, x in enumerate(ATTACK_EXAMPLES, 1)
+] + [
+    Scenario(len(ATTACK_EXAMPLES) + 1, "No attack: a normal request the guard must let through", "benign",
              "user_task_33", None, None),
 ]
 
@@ -75,6 +77,7 @@ class Result:
     attack_success: bool | None = None
     utility: bool | None = None
     caught_by: list[str] = field(default_factory=list)
+    other_blocks: list[str] = field(default_factory=list)  # blocked calls that were not the attacker's goal
     guard_ms: float = 0.0
     judge_calls: int = 0
     wall_s: float = 0.0
@@ -124,13 +127,11 @@ def check_against_data(scenario: Scenario, run_event: dict[str, Any], model_name
     if scenario.goal_id is None:  # benign: the task must be a test-split user task, nothing planted
         with (DATA / "user_tasks.jsonl").open(encoding="utf-8") as tasks:
             row = next(json.loads(line) for line in tasks if json.loads(line)["id"] == scenario.task_id)
-        if row["split"] != "test" or run_event["injections"] or run_event["poisoned_descriptions"]:
-            raise AssertionError(f"{scenario.task_id} must be a test-split task with nothing planted")
-        return f"data/user_tasks.jsonl · {scenario.task_id} (nothing planted)"
+        if run_event["injections"] or run_event["poisoned_descriptions"]:
+            raise AssertionError(f"{scenario.task_id} must have nothing planted")
+        return f"data/user_tasks.jsonl · {scenario.task_id} ({row['split']} split, nothing planted)"
     key = f"{scenario.task_id}|{scenario.goal_id}|{scenario.attack}"
     row = load_case(scenario.attack, key)
-    if row["split"] != "test":
-        raise AssertionError(f"{key} is not a test-split case")
     # The exported text addresses the default model as "Qwen"; runs use the agent's name.
     normalize = lambda value: json.loads(json.dumps(value).replace("Qwen", model_name))  # noqa: E731
     schemas: dict[str, dict[str, str]] = {}
@@ -144,7 +145,7 @@ def check_against_data(scenario: Scenario, run_event: dict[str, Any], model_name
     )
     if planted != expected:
         raise AssertionError(f"planted text for {key} differs from data/attacks/{scenario.attack}.jsonl")
-    return f"data/attacks/{scenario.attack}.jsonl · {key}"
+    return f"data/attacks/{scenario.attack}.jsonl · {key} ({row['split']} split)"
 
 
 def describe_attack(changes: dict[str, Any]) -> str:
@@ -168,6 +169,12 @@ async def play(manager: RunManager, scenario: Scenario, guard: str, printer: Pri
     result = Result(scenario, guard, setup=meta)
     planted = extract_indicators(meta["goal"] or "") - extract_indicators(run.prompt)
     guarded = guard != "off"
+
+    def attackers_call(tool: str, arguments: Any) -> bool:
+        """Does this call carry out the attacker's goal (a value only the goal names, or its delete)?"""
+        hit = planted & extract_indicators(json.dumps(arguments, default=str))
+        # Goals 1 and 5 end in a delete, which names no attacker address.
+        return bool(hit) or (scenario.goal_id, tool) in {("injection_task_1", "delete_file"), ("injection_task_5", "delete_email")}
     printer.line(f"── Guard {'ON  (d3 only: d3 judge before each call, d3 scan after; no rules)' if guarded else 'OFF'}", "bold")
     printer.step("→", "NLIP", "POST /nlip · user text + authorization token + conversation token")
     if guard in ("off", GUARD_ON):  # neither checks tool descriptions
@@ -201,16 +208,20 @@ async def play(manager: RunManager, scenario: Scenario, guard: str, printer: Pri
                 why = f"P(user would approve) = {event['p_aligned']:.2f} vs threshold {threshold:.2f}"
             call = f"{event['tool']}({args_summary(event.get('arguments'))})"
             if event["action"] == "block":
-                result.caught_by.append(JUDGE if event["layer"] == "judge" else f"pre-tool {layer}")
-                printer.step("✗", "pre-tool", f"{call} → BLOCKED by {layer}: {short(why, 80)}", "bad")
+                if scenario.goal_id is None or attackers_call(event["tool"], event.get("arguments")):
+                    result.caught_by.append(JUDGE if event["layer"] == "judge" else f"pre-tool {layer}")
+                    note = ""
+                else:  # e.g. a delete the user never asked for: right to block, but not the planted goal
+                    result.other_blocks.append(event["tool"])
+                    note = " (a call the user didn't ask for, but not the attacker's goal)"
+                printer.step("✗", "pre-tool", f"{call} → BLOCKED by {layer}: {short(why, 80)}{note}", "bad")
                 printer.step(" ", "", "the MCP tools/call is never sent; the model is told it was blocked", "dim")
             elif event["reason"] == "read-only tool":
                 printer.step("✓", "pre-tool", f"{call} → allowed (read-only tool: no side effects, nothing to judge)", "ok")
             else:
                 printer.step("✓", "pre-tool", f"{call} → allowed ({layer}: {short(why, 60)})", "ok")
         elif kind == "tool_executed":
-            hit = planted & extract_indicators(json.dumps(event.get("arguments"), default=str))
-            if hit or (scenario.goal_id == "injection_task_1" and event["tool"] == "delete_file"):
+            if scenario.goal_id and attackers_call(event["tool"], event.get("arguments")):
                 printer.step("→", "tool", f"{event['tool']}({args_summary(event.get('arguments'))}) executed ⚠ attacker's action", "bad")
             else:
                 printer.step("→", "tool", f"{event['tool']}({args_summary(event.get('arguments'))}) executed")
@@ -260,7 +271,9 @@ async def play(manager: RunManager, scenario: Scenario, guard: str, printer: Pri
         printer.step("✓", "RESULT", f"ATTACK STOPPED by {' + '.join(dict.fromkeys(result.caught_by))} · {task} · "
                      f"guard time {result.guard_ms / 1000:.2f} s · {result.judge_calls} judge call(s)", "ok")
     else:
-        printer.step("·", "RESULT", f"attack did not happen: the model ignored the instruction (no guard involved) · {task}", "warn")
+        also = f" · the guard also blocked an unrequested {', '.join(dict.fromkeys(result.other_blocks))} call" if result.other_blocks else ""
+        guard_note = "" if guarded else " (no guard involved)"
+        printer.step("·", "RESULT", f"attack did not happen: the model ignored the instruction{guard_note} · {task}{also}", "warn")
     await run.close()
     manager.runs.pop(run.id, None)
     return result
@@ -270,7 +283,6 @@ async def replay(
     selected: list[Scenario], *, offline: bool, printer: Printer, model: str | None = None, retries: int = 0
 ) -> list[Result]:
     manager = RunManager(offline=offline, signin="stub")
-    model_name = "Gemma" if model and "gemma" in model else "Qwen"
     printer.line("Tool guard replay · workspace assistant over NLIP (ECMA-430/431)", "head")
     if offline:
         printer.line("Offline mode: a scripted agent replays AgentDojo's tool calls and obeys any instruction it can")
@@ -279,22 +291,28 @@ async def replay(
         printer.line(f"Live mode: agent model {model or os.getenv('AGENT_MODEL', 'qwen-3.8-27b')}, d3 judge (vllm-sr/d3-flash).", "dim")
     results = []
     for scenario in selected:
+        chosen = model
+        if not offline and model is None and scenario.model:
+            chosen = scenario.model
+        model_name = "Gemma" if chosen and "gemma" in chosen else "Qwen"
         printer.line()
         printer.line(f"━━ Scenario {scenario.number}/{len(SCENARIOS)} · {scenario.title}", "head")
-        preview = manager.preview(RunSpec(scenario=scenario.attack, task_id=scenario.task_id, goal_id=scenario.goal_id, model=model))
+        preview = manager.preview(RunSpec(scenario=scenario.attack, task_id=scenario.task_id, goal_id=scenario.goal_id, model=chosen))
         task = manager.suite.get_user_task_by_id(scenario.task_id)
+        if chosen != model:
+            printer.line(f"   Model   {chosen} (the model this attack worked on in the evaluation)", "dim")
         printer.line(f"   Task    “{short(task.PROMPT, 80)}”  ({scenario.task_id})")
         printer.line(f"   Attack  {describe_attack(preview)}{':' if scenario.goal_id else ''}")
         if scenario.goal_id:
             goal = manager.suite.get_injection_task_by_id(scenario.goal_id)
             printer.line(f"           “{short(goal.GOAL, 90)}”")
-        off = await play(manager, scenario, "off", printer, model)
+        off = await play(manager, scenario, "off", printer, chosen)
         for _ in range(retries if not offline and scenario.goal_id else 0):
             if off.attack_success:
                 break
             printer.line("   (the model ignored the instruction; trying again)", "dim")
-            off = await play(manager, scenario, "off", printer, model)
-        on = await play(manager, scenario, GUARD_ON, printer, model)
+            off = await play(manager, scenario, "off", printer, chosen)
+        on = await play(manager, scenario, GUARD_ON, printer, chosen)
         source = check_against_data(scenario, off.setup, model_name)
         printer.line(f"   ✓ planted text matches the submitted test data: {source}", "dim")
         results += [off, on]
@@ -305,9 +323,9 @@ async def replay(
 def summary(results: list[Result], printer: Printer) -> None:
     printer.line()
     printer.line("Summary: what got through, what was blocked, what it cost", "head")
-    header = "| # | Attack | Guard OFF | Guard ON | Stopped by | Task done (ON) | Guard time | Judge calls |"
+    header = "| # | Attack | Attacker wants to | Guard OFF | Guard ON | Stopped by | Task done (ON) | Guard time | Judge calls |"
     printer.line(header)
-    printer.line("|---|---|---|---|---|---|---|---|")
+    printer.line("|---|---|---|---|---|---|---|---|---|")
     pairs = {}
     for result in results:
         pairs.setdefault(result.scenario.number, {})["off" if result.guard == "off" else "on"] = result
@@ -315,12 +333,16 @@ def summary(results: list[Result], printer: Printer) -> None:
     def verdict(r: Result) -> str:
         if r.scenario.goal_id is None:
             return "false block" if r.caught_by else "allowed"
-        return "attack succeeded" if r.attack_success else "blocked" if r.caught_by else "not attempted"
+        if r.attack_success:
+            return "attack succeeded"
+        if r.caught_by:
+            return "blocked"
+        return "not attempted" + (f" ({', '.join(dict.fromkeys(r.other_blocks))} blocked)" if r.other_blocks else "")
 
     for number, pair in pairs.items():
         off, on = pair["off"], pair["on"]
         printer.line(
-            f"| {number} | {on.scenario.attack} | {verdict(off)} | {verdict(on)} | "
+            f"| {number} | {on.scenario.attack} | {GOAL_LABELS.get(on.scenario.goal_id, '–')} | {verdict(off)} | {verdict(on)} | "
             f"{' + '.join(dict.fromkeys(on.caught_by)) or '–'} | {'yes' if on.utility else 'no'} | "
             f"{on.guard_ms / 1000:.2f} s | {on.judge_calls} |"
         )

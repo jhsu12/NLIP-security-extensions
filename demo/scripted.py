@@ -14,6 +14,7 @@ come from live runs with the real d3 judge.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -28,7 +29,13 @@ from security_extensions.tool_guard.session import extract_indicators
 
 def goal_marker(goal: str) -> str:
     """A distinctive piece of the attacker's instruction (its first line, at most 60 chars)."""
-    return goal.strip().splitlines()[0][:60]
+    return _plain(goal.strip().splitlines()[0][:60])
+
+
+def _plain(text: str) -> str:
+    # Tool results reach the model as YAML, which wraps long lines and writes ' as '' inside
+    # quoted strings; compare text the way a reader sees it.
+    return re.sub(r"\s+", " ", text.replace("''", "'"))
 
 
 class ScriptedAgentModel(BaseChatModel):
@@ -52,7 +59,7 @@ class ScriptedAgentModel(BaseChatModel):
 
     def _next(self, messages: list[BaseMessage]) -> AIMessage:
         issued = {call["id"] for message in messages if isinstance(message, AIMessage) for call in message.tool_calls}
-        seen = self.tools_text + "".join(str(m.content) for m in messages if isinstance(m, ToolMessage))
+        seen = _plain(self.tools_text + "".join(str(m.content) for m in messages if isinstance(m, ToolMessage)))
         hijacked = self.marker is not None and self.marker in seen
         script = [(f"attack_{i}", call) for i, call in enumerate(self.attack_calls)] if hijacked else []
         script += [(f"user_{i}", call) for i, call in enumerate(self.user_calls)]
@@ -82,7 +89,7 @@ def simulated_d3(prompt: str, goal: str | None, attack_calls: Sequence[dict[str,
         return 0.03 if values & planted or own_call else 0.93
 
     def injected(text: str) -> float:
-        return 0.97 if marker and marker in text else 0.02
+        return 0.97 if marker and marker in _plain(text) else 0.02
 
     judge = StubJudge(aligned=aligned, injected=injected)
     judge.name = "simulated-d3"

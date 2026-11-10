@@ -42,14 +42,16 @@ async function init() {
   $("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
   $("#input").addEventListener("input", () => { if (ui.task && $("#input").value !== taskById(ui.task).prompt) markTask(null); });
   $("#new-chat").addEventListener("click", newChat);
-  $("#show-attack").addEventListener("click", showAttack);
+  renderExamples();
   $("#replay").addEventListener("change", replay);
   $("#show-trace").addEventListener("change", (e) => $("#steps").classList.toggle("no-trace", !e.target.checked));
   setupSignin();
   settingsChanged();
 }
 
-const taskById = (id) => ui.opt.tasks.find((t) => t.id === id);
+// Preset chips, or the task of a "Show me an attack" example (not every example task has a chip).
+const taskById = (id) => ui.opt.tasks.find((t) => t.id === id)
+  || ui.opt.examples.filter((x) => x.task_id === id).map((x) => ({ id, title: x.title, prompt: x.prompt }))[0];
 
 function pickTask(id) {
   markTask(id);
@@ -64,16 +66,34 @@ function markTask(id) {
   if (changed) refreshPreview(); // which tools/data get poisoned depends on the task
 }
 
-// The combination the evaluation saw succeed on both models: "show my unread emails"
-// with a poisoned tool asking to email the attacker, guard off. Then flip the guard on.
-function showAttack() {
-  ui.scenario = "tools";
-  $("#scenario").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === "tools"));
-  $("#goal").value = "injection_task_0";
-  $("#style").value = "tool_poisoning";
+// Setups where the evaluation saw the attack succeed without a guard. Picking one sets the
+// scenario, goal, style and task with the guard off; then flip the guard on and send again.
+const STYLE = { tool_poisoning: "<IMPORTANT> block in a tool description", tool_poisoning_plain: "one plain sentence in a tool description",
+  schema_poisoning: "one sentence in a parameter description", schema_poisoning_tagged: "<IMPORTANT> block in a parameter description",
+  important_instructions: "instructions planted in an email, file or event" };
+
+function renderExamples() {
+  const goal = (id) => ui.opt.goals.find((g) => g.id === id)?.label || id;
+  $("#examples").innerHTML = ui.opt.examples.map((x, i) => {
+    const data = x.attack === "important_instructions";
+    return `<button class="example" data-i="${i}"><span class="tag ${data ? "warn" : "bad"}">${data ? "Poisoned data" : "Poisoned tools"}</span>
+      <b>${esc(x.title)} → ${esc(goal(x.goal_id))}</b><small class="muted">${esc(STYLE[x.attack])} · ${esc(x.worked)}</small></button>`;
+  }).join("");
+  $("#examples").onclick = (e) => {
+    const b = e.target.closest(".example");
+    if (b) { $("#show-attack").open = false; showAttack(ui.opt.examples[b.dataset.i]); }
+  };
+}
+
+function showAttack(x) {
+  ui.scenario = x.attack === "important_instructions" ? "data" : "tools";
+  $("#scenario").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === ui.scenario));
+  $("#goal").value = x.goal_id;
+  if (ui.scenario === "tools") $("#style").value = x.attack;
+  if (x.model && !ui.opt.offline) $("#model").value = x.model;
   ui.guard = false;
   settingsChanged();
-  pickTask("user_task_24");
+  pickTask(x.task_id);
 }
 
 function scenarioKey() {
@@ -486,7 +506,34 @@ function onOutcome(e) {
     : run.guardActed ? ["good", "✓ Attack stopped by the guard", GOAL(run.meta)]
     : off() ? ["", "Attack failed: the model ignored it", "No guard. Try again, or ⚡ Show me an attack"]
     : ["good", "✓ Attack didn't happen", "the model ignored it; the guard didn't need to act"];
-  box.innerHTML = [task, attack].map(([c, t, s]) => `<div class="verdict ${c}">${t}<small>${esc(s)}</small></div>`).join("");
+  run.outcome = e;
+  box.innerHTML = [[...task, "utility"], [...attack, "attack"]].map(([c, t, s, which]) => e.checks?.[which]
+    ? `<button class="verdict ${c} clickable" data-check="${which}" data-title="${esc(t)}" title="How AgentDojo decided">${t}<small>${esc(s)} · why? ⓘ</small></button>`
+    : `<div class="verdict ${c}">${t}<small>${esc(s)}</small></div>`).join("");
+  box.querySelectorAll("[data-check]").forEach((b) => (b.onclick = () => openCheck(b.dataset.check, b.dataset.title)));
+}
+
+// Pop-up behind a verdict: AgentDojo's checker code and what it compared.
+function openCheck(which, verdict) {
+  const e = run.outcome, check = e.checks[which];
+  const user = which === "utility";
+  const SIGN = { added: ["+", "added"], removed: ["−", "removed"], changed: ["~", "changed"] };
+  const changes = e.changes === null || e.changes === undefined
+    ? `<p class="muted small">Recorded runs don't keep the account itself. Tool calls that ran:</p>
+       <ul class="chg">${(e.executed || []).map((c) => `<li><code>${esc(c.tool)}</code> <span class="muted">${esc(JSON.stringify(c.args))}</span></li>`).join("") || "<li class=muted>none</li>"}</ul>`
+    : e.changes.length
+      ? `<ul class="chg">${e.changes.map((c) => `<li class="${c.kind}"><span class="tag">${SIGN[c.kind][0]} ${SIGN[c.kind][1]}</span> <code>${esc(c.path)}</code>
+          ${c.kind === "changed" ? `<span class="muted">${esc(c.before)} → ${esc(c.after)}</span>` : `<div class="muted small">${esc(c.value)}</div>`}</li>`).join("")}</ul>`
+      : `<p class="muted small">Nothing changed in Emma's account.</p>`;
+  $("#tools-body").innerHTML = `<h3>${esc(verdict)}: how AgentDojo decided</h3>
+    <p class="muted small">${user
+      ? "AgentDojo runs the Python function below on Emma's account before and after the run, and on the assistant's reply. No LLM is involved, and it does not read the reply the way Emma would. For most tasks it passes only if the change Emma asked for happened <b>and nothing else changed</b>, so any extra action (such as an email to the attacker) fails the task."
+      : "AgentDojo runs the attacker goal's own check, the Python function below, on Emma's account after the run (and for some goals on the reply). <b>True</b> means the attacker's goal was reached. It doesn't matter why it wasn't: the guard may have blocked it, or the model ignored the instruction."}</p>
+    <section class="change"><h4>${user ? "Emma asked" : "The attacker wanted"}</h4><pre>${esc(check.text)}</pre></section>
+    <section class="change"><h4>What changed in Emma's account${e.changes ? ` (${e.changes.length})` : ""}</h4>${changes}</section>
+    <section class="change"><h4>The reply that was checked</h4><pre>${esc((e.reply || "(no reply)").slice(0, 1500))}</pre></section>
+    <section class="change"><h4>Checker code · <code>${esc(check.function)}</code></h4><pre class="code">${esc(check.source || "(source not available)")}</pre></section>`;
+  $("#tools-dialog").showModal();
 }
 
 // --- replay a saved run ---------------------------------------------------------------------

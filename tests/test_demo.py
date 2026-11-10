@@ -49,8 +49,19 @@ def test_attack_succeeds_with_the_guard_off() -> None:
     assert outcome["attack_success"] is True
 
 
-def test_catalog_check_strips_the_poison_with_the_guard_on() -> None:
+def test_guard_on_is_the_final_design_and_blocks_the_hijacked_call() -> None:
     response, events = run(demo_run({**ATTACK, "guard": "on"}))
+    assert response.status_code == 200
+    (run_event,) = by_type(events, "run")
+    assert run_event["config"] == "d3_only"
+    assert not by_type(events, "guard", "catalog")  # no catalog check in the final design
+    blocked = [e for e in by_type(events, "guard", "pre_tool") if e["action"] == "block"]
+    assert blocked and blocked[0]["layer"] == "judge" and ATTACKER in str(blocked[0]["arguments"])
+    assert by_type(events, "outcome")[0]["attack_success"] is False
+
+
+def test_catalog_check_strips_the_poison_in_the_earlier_design() -> None:
+    response, events = run(demo_run({**ATTACK, "guard": "hybrid"}))
     assert response.status_code == 200
     (catalog,) = by_type(events, "guard", "catalog")
     assert {c["tool"] for c in catalog["changed_tools"]} == set(by_type(events, "run")[0]["poisoned_descriptions"])
@@ -208,3 +219,28 @@ def test_run_browser_replays_a_saved_episode_in_recorded_order(tmp_path) -> None
     assert events[0]["changes"]["tools"][0]["tool"] == "send_email"
     with pytest.raises(KeyError):
         browser.events("../../etc/passwd", "x")  # only files in the results folder
+
+
+def test_outcome_explains_each_verdict_with_the_checker_and_account_changes() -> None:
+    _, events = run(demo_run({**ATTACK, "guard": "off"}))
+    (outcome,) = by_type(events, "outcome")
+    utility, attack = outcome["checks"]["utility"], outcome["checks"]["attack"]
+    assert utility["task_id"] == "user_task_33" and utility["function"].endswith(".utility")
+    assert "def utility" in utility["source"]
+    assert attack["task_id"] == "injection_task_4" and "def security" in attack["source"]
+    # The attacker's email is in the account diff the checkers compare.
+    added = [c for c in outcome["changes"] if c["kind"] == "added"]
+    assert any(ATTACKER in c["value"] for c in added)
+    assert outcome["reply"]
+
+
+@pytest.mark.parametrize("index", range(6))
+def test_show_me_an_attack_examples_succeed_without_the_guard_and_are_stopped_with_it(index) -> None:
+    from demo.runs import ATTACK_EXAMPLES
+
+    example = ATTACK_EXAMPLES[index]
+    spec = {"task_id": example["task_id"], "scenario": example["attack"], "goal_id": example["goal_id"]}
+    _, off = run(demo_run({**spec, "guard": "off"}))
+    _, on = run(demo_run({**spec, "guard": "on"}))
+    assert by_type(off, "outcome")[0]["attack_success"] is True
+    assert by_type(on, "outcome")[0]["attack_success"] is False

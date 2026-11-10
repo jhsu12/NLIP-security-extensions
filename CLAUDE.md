@@ -19,7 +19,7 @@ session that built everything on branch `tool-guard`.
 
 ### Grading points to keep in mind
 - Application row (20%): realistic agentic app grounded in NLIP, and it **must support
-  login through OAuth** (e.g. Google). Not done yet.
+  login through OAuth** (e.g. Google). Done: `login.py` + `oauth_verify`.
 - Paper (5 pages, ACM two-column): threat model; cite **ECMA-434 Clause 7 SCOs** by subclause
   number and title (primary: §7.3.1 Prevention of Prompt Injection; check the others against
   the standard, since the exact numbers were never confirmed); why it matters for agents; design; fair test
@@ -66,8 +66,9 @@ session that built everything on branch `tool-guard`.
   - **Optional, ablations only:** `catalog.py` (scans and pins tool descriptions), the regex rules
     in `scanner.py`, and the policy blocking rules in `policy.py` (planted values, deletes without
     user intent).
-  - **`config.toml` still defaults to `hybrid_d3_catalog`.** "Docs only" decision, 2026-10-27; the
-    docs say so and show the d3-only options.
+  - **`config.toml`, web demo "Guard On" and `demo.replay` all use `d3_only`** (switched
+    2026-11-10). The earlier design is the `hybrid` demo variant / `hybrid_d3_catalog` config. The
+    ablation configs pin `policy_rules = true` themselves, so they resolve as in the recorded runs.
   - `nlip_extension.py`: an NLIP ingress SE that records the user's text as the trusted task (egress
     closes the turn).
   - `langchain_middleware.py`: the `awrap_tool_call` adapter + `guard_tool_catalog`.
@@ -81,7 +82,8 @@ session that built everything on branch `tool-guard`.
   - Also: `run_matrix.sh`, `metrics.py` (`--by-goal`, `--layers`), `catalog_eval.py`,
     `scanner_eval.py`, `tracing.py`, `export_explorer.py`, `configs/*.toml`, `data/`, `results/`.
 - `demo/`:
-  - `replay.py`: the terminal demo for graders, d3-only, 5 attacks + 1 benign;
+  - `replay.py`: the terminal demo for graders, d3-only: the web page's 6 "Show me an attack"
+    examples (`runs.ATTACK_EXAMPLES`, 3 are dev split) + 1 benign;
   - `web.py`: the web demo with the live full trace, plus `/runs` (browse saved episodes one by
     one), `/how` and `/checks`.
 - `tests/`: 77 offline tests (`pytest`, no network needed).
@@ -113,17 +115,14 @@ session that built everything on branch `tool-guard`.
   serialize guarded calls per session.
 
 ## Current state / next steps
-- **Uncommitted since `d635d9f`:** probes, catalog/scanner evals, the d3-only config and final run,
-  tracing, the live trace, the run browser, the replay update, and these doc updates.
+- Everything through `bc3bf47` is committed and pushed; the `d3_only` default switch (2026-11-10)
+  is uncommitted unless git says otherwise.
 - **Open, in rough priority order:**
-  1. Commit and push.
+  1. Paper (5 pages ACM; not started; ECMA-434 §7.3.1 confirmed by the spec; check the other SCO
+     numbers in the standard).
   2. Serialize guarded calls per session, and retry d3 on 429/disconnects; measure with `d3_only`.
-  3. Optionally: scan only read-tool results (removes the false redactions), `judge_reads`, and
-     switching `config.toml` and demo "Guard On" to `d3_only` (pin the old defaults in ablation
-     configs first).
-  4. Paper (5 pages ACM; ECMA-434 §7.3.1 confirmed by the spec; check the other SCO numbers in the
-     standard).
-  5. Fresh-clone reproducibility check.
+  3. Fresh-clone reproducibility check.
+  4. Optionally: scan only read-tool results (removes the false redactions), `judge_reads`.
 
 ## Gotchas learned
 - The shell is zsh: no word-splitting of `$VAR` args (use `run_matrix.sh`), and there's no `timeout` command on macOS.
