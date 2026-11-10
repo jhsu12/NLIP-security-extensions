@@ -1,5 +1,6 @@
 # L1 policy + rule-based result scanning; no judge model at all.
 [options]
+policy_rules = true
 catalog = "off"
 judge = "none"
 scanner = "rules"

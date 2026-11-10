@@ -43,7 +43,8 @@ goals, and 560 cases per attack with the exact planted text.
 | `policy_only` | ablation: policy rules + rule-based scanning, no judge |
 
 Each config only sets the options that differ, and inherits the rest from the application's
-`config.toml`. That file still defaults to `hybrid_d3_catalog`'s settings.
+`config.toml`, whose defaults are `d3_only`'s settings. The ablations pin `policy_rules = true`
+explicitly, so their runs don't depend on that default.
 
 ## Run
 

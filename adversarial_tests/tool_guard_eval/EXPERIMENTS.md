@@ -570,8 +570,10 @@ adversarial_tests/tool_guard_eval/run_matrix.sh --tag d3final_schema --configs "
 
   Accepted costs: ≈9 points lower task success under tagged tool poisoning, and poison that only
   changes the model's answer (no tool call) is not caught.
-- **Docs only, for now** (2026-10-27): the application's default `config.toml` and the web demo's
-  "Guard On" still enable `hybrid_d3_catalog`. The docs state this and show the d3-only options.
+- **App default switched** (2026-11-10): the application's default `config.toml`, the web demo's
+  "Guard On" and `demo.replay` all use `d3_only`. The ablation configs that inherited
+  `policy_rules = true` from `config.toml` now set it themselves, so every config resolves to the
+  same options as in the runs above.
 - Judge: d3-flash with the "approve" wording; thresholds 0.5 normal / 0.7 tainted (set on dev, E3).
 - Agent models: qwen-3.8-27b and gemma-4-31b-it (gpt-oss-120b too slow, E0).
 
@@ -584,7 +586,8 @@ adversarial_tests/tool_guard_eval/run_matrix.sh --tag d3final_schema --configs "
 - OAuth sign-in;
 - the web demo with live full trace and the `/runs` browser;
 - the terminal replay for graders (`python -m demo.replay`);
-- `--trace` and an Invariant Explorer export.
+- `--trace` and an Invariant Explorer export;
+- `d3_only` as the app's default and the demo's "Guard On" (2026-11-10).
 
 **Open:**
 1. **Serialize guarded tool calls per session.** This is the `user_task_25` ordering issue. Then
@@ -595,9 +598,7 @@ adversarial_tests/tool_guard_eval/run_matrix.sh --tag d3final_schema --configs "
    agent's own sent email.
 4. **Optional `judge_reads`:** judge read-only calls too. It costs ≈3× the d3 calls, but removes the
    reliance on the deployer's read-only labels.
-5. **Switch the app's default `config.toml` and the web demo's "Guard On" to `d3_only`.** Before
-   that, pin the old defaults in every ablation config that inherits them.
-6. **An attack on legitimate recipients that the models actually carry out** (goal 13 never ran
+5. **An attack on legitimate recipients that the models actually carry out** (goal 13 never ran
    undefended).
-7. **Thresholds (optional):** 0.5 / 0.7 were set by hand on dev; a sweep could give a curve.
-8. **The paper and a fresh-clone check.**
+6. **Thresholds (optional):** 0.5 / 0.7 were set by hand on dev; a sweep could give a curve.
+7. **The paper and a fresh-clone check.**

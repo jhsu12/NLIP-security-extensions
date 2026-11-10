@@ -13,8 +13,8 @@ side-effecting call, and a d3 scan of every tool result. There are no regex rule
 blocking rules and no catalog check. Those components still exist and are used by ablation
 configs (§5).
 
-The application's default `config.toml` still enables the earlier `hybrid_d3_catalog` setup;
-see the README's "Running the final design".
+The application's default `config.toml` uses these settings; see the README's "Running the final
+design".
 
 ## 1. Request lifecycle
 
