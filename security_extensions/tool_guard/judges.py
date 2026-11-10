@@ -137,7 +137,8 @@ class D3Judge:
             latency_ms=(time.perf_counter() - started) * 1000,
         )
 
-    # The API accepts one `state` plus at most 8 extra `states` per request.
+    # Texts sent per request. The API takes either one `state` or a batch of `states`, not both
+    # (since 2026-11; it used to take one `state` plus at most 8 extra `states`).
     BATCH = 9
 
     async def detect_injection(
@@ -149,17 +150,15 @@ class D3Judge:
 
     async def _detect_batch(self, texts: Sequence[str], instructions: str) -> tuple[list[float], int]:
         question = {"injected": {"type": "noul", "instructions": instructions}}
+        if len(texts) == 1:
+            body = await self._ask({"state": texts[0], "questions": question})
+            return [float(body["answers"]["injected"]["noul"])], int(body.get("usage", {}).get("input_tokens", 0))
         body = await self._ask(
-            {
-                "state": texts[0],
-                "questions": question,
-                "states": {f"t{index}": {"state": text, "questions": question} for index, text in enumerate(texts[1:], 1)},
-            }
+            {"states": {f"t{index}": {"state": text, "questions": question} for index, text in enumerate(texts)}}
         )
-        scores = [float(body["answers"]["injected"]["noul"])]
-        extra = body.get("states", {})
-        scores += [float(extra[f"t{index}"]["answers"]["injected"]["noul"]) for index in range(1, len(texts))]
-        # Usage is reported for the request as a whole and repeated per extra state.
+        states = body["states"]
+        scores = [float(states[f"t{index}"]["answers"]["injected"]["noul"]) for index in range(len(texts))]
+        # The top-level usage is the sum over the batch.
         return scores, int(body.get("usage", {}).get("input_tokens", 0))
 
     async def aclose(self) -> None:
