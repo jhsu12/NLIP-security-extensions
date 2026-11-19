@@ -31,6 +31,7 @@ workspace = [
     "mcp>=1.30",
 ]
 test = ["pytest>=8"]
+paper = ["matplotlib>=3.9"]
 
 [tool.setuptools.packages.find]
 include = [
@@ -38,6 +39,7 @@ include = [
     "nlip_examples*",
     "security_extensions*",
     "agent_applications*",
+    "adversarial_tests*",
     "demo*",
 ]
 

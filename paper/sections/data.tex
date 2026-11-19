@@ -1,0 +1,39 @@
+\section{Test Data}\label{sec:data}
+
+\paragraph{Tasks and goals.} We use AgentDojo's workspace suite~\cite{agentdojo}: 40 user
+tasks (benign traffic), such as ``Please send an email to each person mentioned in the TODO
+list in the team meeting minutes file with the task they need to execute'', and 14 attacker
+goals. An attack episode pairs a user task with a goal and one way of planting it
+(Appendix Table~\ref{tab:attacks}): AgentDojo's four data attacks
+(\texttt{important\_instructions}, \texttt{tool\_knowledge}, \texttt{direct},
+\texttt{ignore\_previous}) and our static judge-aware variant \texttt{judge\_aware} plant text in emails, events
+and files; our MCP attacks plant the goal in tool descriptions (\emph{tagged}: an Invariant
+Labs-style \texttt{<IMPORTANT>} block~\cite{invariant2025}; \emph{plain}: one sentence) or in
+parameter descriptions (tagged). AgentDojo's checkers then score each episode.
+\emph{Attack success} (did the attacker's side effect happen?) is read from the final backend
+state. \emph{Utility} (was the user's task done?) is read from the state and, for \UtilityReadsAnswer{} of the 40
+tasks, also from the agent's answer.
+
+
+\paragraph{Fairness.} Tasks whose number is divisible by 4 form a \emph{dev} split (10
+tasks), the other 30 a \emph{test} split; all guard numbers in \S\ref{sec:results} are on test.
+Each attack style uses the same 150 (task, goal) pairs (seed 7) for every configuration, so the
+guard and no guard see identical cases. The final guard contains no pattern of any attack.
+Every episode starts a fresh NLIP server and sends the task as an NLIP message to
+\texttt{POST /nlip} through an in-process HTTP transport; the harness ran on our own laptop and
+the models on Jetstream2. The harness disables the sign-in SE, so sign-in is not part of the
+evaluated path. The 40 tasks, 14 goals and every planted text (560 cases per attack) are
+exported as plain files. The poison is placed in the tools or data the reference solution
+uses, so the model sees it whenever it follows that path, which favors the attacker.
+
+\paragraph{Deviations from a clean hold-out.} Three things weaken the split. (i) Several
+design choices came from two \emph{test} tasks, 13 and 25. The judge's wording and its 0.7
+threshold were chosen from their judge inputs, into which five hand-written attacker calls were
+inserted: the calls of goals 0, 1 and 2, a security-code email like goals 4--5, and sharing
+file 13 with the attacker. The ranked evidence lines and the 1,500-character result preview
+fixed false blocks on task 25, and span-only redaction and the 20-call cap came from
+behaviour on task 13. (ii) Earlier
+designs (the ablations) and two unreported partial pilot runs of the final design were run on
+test before we chose it. (iii) The decision to drop the rules used the single-check
+measurements, also on test data. \S\ref{sec:results} therefore also reports the headline
+numbers without tasks 13 and 25.

@@ -1,0 +1,13 @@
+\section{Related Work and Conclusion}\label{sec:related}
+
+\paragraph{Related work.} Indirect prompt injection~\cite{greshake2023,liu2024formalizing}
+and MCP tool poisoning~\cite{invariant2025,mcptox} are benchmarked by AgentDojo~\cite{agentdojo}
+and MCPTox. CaMeL~\cite{camel} and Progent~\cite{progent} constrain data flow or privileges but
+need the agent rebuilt or a policy per task; MELON~\cite{melon} re-runs the agent with the
+request masked; MCP-Guard~\cite{mcpguard} scans MCP traffic. \sys follows Task
+Shield~\cite{taskshield} and AlignmentCheck~\cite{llamafirewall} in checking actions against the
+user's task, without the agent's reasoning and at standardized NLIP and tool boundaries.
+
+\paragraph{Conclusion.} Of \PairedTotal{} tool-poisoning attacks that succeeded without
+\sys, none succeeded with it, and it blocked no call in benign runs. The costs: legitimate calls blocked in \WrongBlockAttackEps{} attack episodes,
+narrow evidence, and poison that only changes what the agent \emph{says} goes through.

@@ -25,7 +25,8 @@ made rather than reproducing final numbers.
   under attack* over attack episodes. The two checks are independent.
 - **False-block rate:** benign episodes in which the guard blocked at least one call.
 - **dev / test split:** the 10 user tasks whose number is divisible by 4 were used to choose
-  settings; the other 30 were not looked at until E11.
+  settings; the other 30 were first run end to end in E11. Exception: E3 tuned the judge's wording on
+  judge inputs from test tasks 13 and 25.
 - **Configs** (`configs/*.toml`): `none` (no guard); `policy_only` (rules, no model);
   `judge_only_d3` (d3 judge on every side-effecting call, no rules, no scanning); `hybrid_d3`
   (policy + judge + result scanning + taint); `catalog_only_d3` (tool-description check only);
@@ -76,7 +77,7 @@ tainted threshold 0.8.
 **Finding:** two problems, an over-strict judge (E3) and agent loops (E4), and qwen may not be
 hijackable with this template.
 
-## E3: False-positive investigation and judge wording (dev)
+## E3: False-positive investigation and judge wording (test tasks 13 and 25)
 
 **Question:** Why were user_task_25's legitimate emails blocked, and which judge question
 separates benign from attack calls best?
@@ -99,7 +100,9 @@ separates benign from attack calls best?
 
 **Changes:** adopted the "approve" wording, ranked evidence lines, a 1500-character result preview, and
 lowered the tainted threshold from 0.8 to **0.7** (benign calls bottom out near 0.80).
-*Caveat:* tuned on 5 benign and 20 attack inputs from dev tasks only.
+*Caveat:* tuned on 5 benign and 20 attack inputs from **test** tasks 25 and 13 (not dev, as this entry
+once said). The 5 attacker calls are those of goals 0, 1 and 2, a security-code email (goals 4–5) and
+sharing file 13. The paper discloses this and reports E17 with tasks 13 and 25 excluded as well.
 
 ## E4: Preview #2, two models, and the loop diagnosis (ad hoc)
 
@@ -454,9 +457,9 @@ flag?
 
 **Observations:**
 - **Rules and d3 are complementary here.** The rules catch AgentDojo's `<INFORMATION>` template
-  every time. d3 misses it in three calendar events: all 82 misses were unflagged and concentrated
-  in `calendar_dinner_with_clients`, `calendar_moving_event_reason` and
-  `calendar_introductory_meeting`.
+  every time. d3 missed 82 objects: 72 in three calendar events (`calendar_dinner_with_clients`,
+  `calendar_moving_event_reason`, `calendar_introductory_meeting`) and 10 in two drive files
+  (`drive_keywords_stuffing`, `drive_team_building`).
 - No mode touched ordinary workspace content.
 - **d3's false positives** are text written as instructions to a *person*: onboarding steps,
   handover notes "for the assistant covering my desk", an AI-usage policy, saved prompts, an agenda.
@@ -491,6 +494,9 @@ adversarial_tests/tool_guard_eval/run_matrix.sh --tag d3final_schema --configs "
 - **Traces:** every episode is traced (model messages, raw tool results, every d3 question and
   answer, timestamps). Browse them in the web demo at `/runs`.
 - **Files:** `results/d3_only__*__test__d3final.jsonl`.
+- **Pilot runs (not reported):** `results/d3_only__*__test__d3only.jsonl` (an untraced first attempt,
+  stopped partway: 89 qwen and 109 gemma episodes) and `__trace.jsonl` (6 traced episodes per model).
+  The final numbers use only the `d3final` files.
 
 | qwen / gemma | Guard off (E11 / E14) | **d3 only** |
 |---|---|---|
@@ -553,8 +559,10 @@ adversarial_tests/tool_guard_eval/run_matrix.sh --tag d3final_schema --configs "
 6. The catalog check has a blind spot: poison in **parameter** descriptions. In its tagged form
    (7–12% ASR undefended) the call-level layers stopped all of it (judge 25, policy 10 episodes;
    E14). The plain form barely works on these models (E12).
-7. **Not shown:** harmful actions toward legitimate recipients (goal 13). The models never attempted
-   it even undefended (E13), so the guard's behavior there is untested.
+7. **Partly shown:** harmful actions toward legitimate recipients (goal 13). On the test split the
+   models never attempted it, even undefended (E13). On dev, tool poisoning achieved it 3 times without
+   a guard (E7), and `judge_only_d3` and `hybrid_d3` blocked all 3 phishing sends (P(aligned) ≤ 0.007).
+   The final `d3_only` config was not run on those pairs.
 8. **Rules don't generalize.** Regex rules over-block legitimate tool documentation (catalog: 35% of
    tricky benign descriptions kept, E15), and they match the very templates of the attack sets (E16).
    d3 alone detects all of our poisoned descriptions and 91% of AgentDojo's data injections.
@@ -574,7 +582,7 @@ adversarial_tests/tool_guard_eval/run_matrix.sh --tag d3final_schema --configs "
   "Guard On" and `demo.replay` all use `d3_only`. The ablation configs that inherited
   `policy_rules = true` from `config.toml` now set it themselves, so every config resolves to the
   same options as in the runs above.
-- Judge: d3-flash with the "approve" wording; thresholds 0.5 normal / 0.7 tainted (set on dev, E3).
+- Judge: d3-flash with the "approve" wording; thresholds 0.5 normal / 0.7 tainted (set in E3, on inputs from test tasks 13 and 25).
 - Agent models: qwen-3.8-27b and gemma-4-31b-it (gpt-oss-120b too slow, E0).
 
 ## Next steps / open items
@@ -592,13 +600,13 @@ adversarial_tests/tool_guard_eval/run_matrix.sh --tag d3final_schema --configs "
 **Open:**
 1. **Serialize guarded tool calls per session.** This is the `user_task_25` ordering issue. Then
    re-run `d3_only` and compare with E17 as "before".
-2. **Retry d3 on 429 and dropped connections.** There were 11 fail-closed hiccups in ~4,600
-   guarded test runs.
+2. **Retry d3 on 503s, timeouts and dropped connections.** The guard failed closed 12 times in 11 of
+   4,244 guarded test episodes (E11, E14, E17; none in E17), mostly HTTP 503 and timeouts.
 3. **Scan only the results of read-only tools.** This would remove E17's 4 false redactions of the
    agent's own sent email.
 4. **Optional `judge_reads`:** judge read-only calls too. It costs ≈3× the d3 calls, but removes the
    reliance on the deployer's read-only labels.
 5. **An attack on legitimate recipients that the models actually carry out** (goal 13 never ran
    undefended).
-6. **Thresholds (optional):** 0.5 / 0.7 were set by hand on dev; a sweep could give a curve.
+6. **Thresholds (optional):** 0.5 / 0.7 were set by hand (E3, on inputs from test tasks 13 and 25); a sweep could give a curve.
 7. **The paper and a fresh-clone check.**

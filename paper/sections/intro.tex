@@ -1,0 +1,30 @@
+\section{Introduction}
+
+NLIP fixes how users and agents exchange messages~\cite{ecma430,ecma431}. It says nothing
+about what an agent does between receiving a request and answering it, and that is where it
+reads untrusted text and acts on it. An email assistant reads the user's inbox and has
+permission to send mail and delete files. Text in a third-party MCP server's tool
+description~\cite{mcp,invariant2025} or in an incoming email~\cite{greshake2023} can tell
+the assistant to forward a security code to an outsider. The user never sees that text, and
+the action is carried out with their authority.
+
+Prior defenses either constrain what the agent may do, such as a privilege policy or a
+separate planning model~\cite{progent,camel}, or check each action against the user's
+task~\cite{taskshield,llamafirewall}. We adopt the second idea and fit it to the constraints
+of an NLIP security extension (SE). The function sees only the NLIP message, the structured
+tool call and its result, its own session state, and the deployer's policy. It never sees the
+agent's reasoning.
+
+\paragraph{Contributions.} (1)~\sys, a Type-3 SE at the tool boundary: its NLIP ingress part
+records the user's request as the only trusted statement of the task, and its tool-boundary
+part judges every side-effecting call against that request and scans every tool result
+(\S\ref{sec:design}); it plugs in through the framework's SE configuration and a middleware,
+with no attack-specific rules. (2)~A realistic NLIP application: an email, calendar and drive
+assistant over MCP with Google OAuth sign-in as an ingress SE (\S\ref{sec:app}). (3)~A paired
+end-to-end evaluation on AgentDojo~\cite{agentdojo} test tasks: the same tool-poisoning cases
+and benign tasks, run with and without \sys{} on two agent models. It shows whether attacks
+that succeed without the guard are stopped with it, and whether benign tasks still complete,
+along with false alarms, cost, precision and recall (\S\ref{sec:results}); the scanner is also measured on its own, since AgentDojo's data
+injections barely work on these models.
+Code, data, a demo and every command are at
+\url{https://github.com/MCP-Tool-Guard/ToolGuard} (MIT license).

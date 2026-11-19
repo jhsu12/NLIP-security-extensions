@@ -1,0 +1,60 @@
+\section{The NLIP Application}\label{sec:app}
+
+The \emph{workspace assistant} manages a user's email, calendar and cloud drive
+(Figure~\ref{fig:flow}). Its backend and 24 tools come from AgentDojo's \texttt{workspace}
+suite (v1.2.2)~\cite{agentdojo}. The tools are served by an in-process MCP server and called
+through the MCP client protocol (\texttt{tools/list}, \texttt{tools/call}). The agent is a
+LangChain agent (at most 20 model calls per turn). It runs on an open-weight model
+(\texttt{qwen-3.8-27b} or \texttt{gemma-4-31b-it}) served through Jetstream2~\cite{jetstream2}.
+It is exposed as an NLIP server over HTTP (ECMA-431), and each NLIP conversation token
+gets its own backend and agent.
+
+\paragraph{Sign-in.} The client signs in with Google (OpenID Connect) and attaches the ID
+token to every request as an NLIP \texttt{authorization} token submessage. An ingress SE,
+\texttt{oauth\_verify}, checks the signature, issuer, client ID, expiry, verified email and an
+optional allow-list, binds the conversation to that user, and removes the token before the
+agent sees the message; otherwise it returns HTTP~403 (ECMA-434 \S7.2.1). A stub verifier
+lets graders run the demo offline.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\small,
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt},
+  guard/.style={box, fill=blue!8, draw=blue!60!black, thick},
+  ext/.style={box, fill=gray!8},
+  atk/.style={draw=red!70!black, text=red!70!black, rounded corners=2pt, align=center, inner sep=2pt, dashed},
+  arr/.style={-{Stealth[length=2mm]}},
+  lbl/.style={font=\footnotesize},
+]
+\node[ext, minimum height=12mm] (client) at (1.2,0) {NLIP client\\(CLI / web page)\\+ Google ID token};
+\node[guard, minimum height=12mm] (ingress) at (5.2,0) {\textbf{Ingress SEs}\\\texttt{oauth\_verify}: sign-in\\\texttt{tool\_guard}: record task};
+\node[box, minimum height=24mm, minimum width=18mm] (agent) at (8.6,0) {Agent\\(LangChain)};
+\node[ext] (llm) at (8.6,1.75) {LLM (qwen / gemma)};
+\node[guard, minimum width=29mm] (pre) at (11.9,0.65) {\textbf{Pre-tool check}\\validation $\cdot$ risk label $\cdot$ \dthree judge};
+\node[guard, minimum width=29mm] (post) at (11.9,-0.75) {\textbf{Post-tool scan}\\\dthree detector $\cdot$ redact $\cdot$ taint};
+\node[ext, minimum height=24mm] (mcp) at (15.6,0) {MCP server\\24 workspace\\tools (mail,\\calendar, drive)};
+\node[guard] (egress) at (5.2,-1.55) {\textbf{Egress SE}: close turn (audit)};
+\node[atk] (a1) at (18.3,0.7) {Attacker:\\tool \& parameter\\descriptions};
+\node[atk] (a2) at (18.3,-0.75) {Attacker:\\emails, events,\\files};
+
+\draw[arr] (client) -- node[lbl, above]{\texttt{POST}} node[lbl, below]{\texttt{/nlip}} (ingress);
+\draw[arr] (ingress) -- (agent);
+\draw[arr, <->] (agent) -- (llm);
+\draw[arr] (agent.east |- pre.west) -- (pre.west);
+\draw[arr] (pre.east) -- node[lbl, above]{\texttt{tools/call}} (pre.east -| mcp.west);
+\draw[arr] (post.east -| mcp.west) -- node[lbl, above]{result} (post.east);
+\draw[arr] (post.west) -- (agent.east |- post.west);
+\draw[arr] (agent.south) |- (egress.east);
+\draw[arr] (egress.west) -| node[lbl, pos=0.3, below]{response} (client.south);
+\draw[arr, red!70!black] (a1.west) -- (a1.west -| mcp.east);
+\draw[arr, red!70!black] (a2.west) -- (a2.west -| mcp.east);
+\draw[arr, dashed, gray!70!black] (mcp.north) |- node[lbl, pos=0.75, above]{\texttt{tools/list}: descriptions reach the model unchecked} (llm.east);
+\end{tikzpicture}}
+\caption{Message flow of the workspace assistant. \sys (blue) records the user's request at
+NLIP ingress. It then checks every proposed tool call before \texttt{tools/call}, and every
+result before the model reads it. A blocked call is never sent; the model is told why.
+The attacker (red) controls tool metadata and content returned by tools.}
+\label{fig:flow}
+\end{figure*}

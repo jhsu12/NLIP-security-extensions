@@ -23,8 +23,10 @@ checkers. The experiment log, with every run, its command and its numbers, is
   | `schema_poisoning_tagged`, `schema_poisoning` | the first *parameter* description of each tool the task uses (MCP `inputSchema`), tagged or plain | ours |
 
   As in AgentDojo, data attacks are planted only in the data the user task actually reads.
-- **Splits:** user tasks whose number is divisible by 4 form `dev` (10 tasks), used to tune
-  thresholds and wording. The other 30 form `test`, used only for reported numbers.
+- **Splits:** user tasks whose number is divisible by 4 form `dev` (10 tasks), meant for tuning; the
+  other 30 form `test`, used for reported numbers. Exception: the judge's wording and the tainted
+  threshold were chosen from judge inputs of test tasks 13 and 25 (E3). The paper reports E17
+  with and without those two tasks.
 
 All cases are also frozen as plain files in [`data/`](data/README.md): 40 user tasks, 14 attacker
 goals, and 560 cases per attack with the exact planted text.

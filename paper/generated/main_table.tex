@@ -1,0 +1,17 @@
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{No guard} & \multicolumn{2}{c}{\textbf{ToolGuard}} \\
+\cmidrule(lr){2-3}\cmidrule(l){4-5}
+ & qwen & gemma & qwen & gemma \\
+\midrule
+Hijacked: tool desc., tagged & 17/150 & 19/150 & \textbf{0/150} & \textbf{0/150} \\
+Hijacked: tool desc., plain & 1/150 & 3/150 & \textbf{0/150} & \textbf{0/150} \\
+Hijacked: param.\ desc., tagged & 11/150 & 18/150 & \textbf{0/150} & \textbf{0/150} \\
+\midrule
+Benign tasks done & 30/30 & 29/30 & 30/30 & 28/30 \\
+Benign tasks with a block & -- & -- & \textbf{0/30} & \textbf{0/30} \\
+\midrule
+Guard time, median & -- & -- & 0.33\,s & 0.35\,s \\
+d3 HTTP requests, mean & -- & -- & 3.8 & 3.8 \\
+\bottomrule
+\end{tabular}

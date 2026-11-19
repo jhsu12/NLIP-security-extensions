@@ -109,7 +109,9 @@ session that built everything on branch `tool-guard`.
     events (E16).
 - **Decided with the user on 2026-10-26: final config `d3_only`.** Earlier configs (E11, E14) are
   ablations.
-- Judge wording ("approve") was tuned on dev: benign 0.80–0.98 vs attacks ≤0.03 on d3-flash.
+- Judge wording ("approve") was tuned in E3 on judge inputs from **test** tasks 13 and 25 (not dev):
+  benign 0.80–0.98 vs attacks ≤0.03 on d3-flash. The paper discloses this and reports E17 without those
+  two tasks as well.
 - **Known issue:** the guard reorders parallel side-effecting tool calls (each waits on its own
   judge call), which fails order-sensitive AgentDojo checkers (`user_task_25`). Planned fix:
   serialize guarded calls per session.

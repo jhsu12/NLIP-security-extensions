@@ -1,0 +1,75 @@
+\section{The Security Function}\label{sec:design}
+
+\sys adapts task-alignment checking~\cite{taskshield,llamafirewall} to an NLIP SE. Every
+tool call must be one the user would approve as a step toward what they asked. Unlike
+AlignmentCheck~\cite{llamafirewall}, it never reads the agent's reasoning. It decides only
+from data visible at its enforcement points: the user's words from the NLIP message, the
+structured call (tool name and JSON arguments) and its result, its own per-session state, and
+a deployer policy file.
+
+\paragraph{Placement and plugging in.} The core is framework-agnostic. It consumes
+\emph{call} and \emph{result} events and returns allow, block or replace, writing each
+decision to a JSONL audit log. Two adapters attach it:
+\begin{itemize}
+\item An NLIP ingress/egress SE (\texttt{tool\_guard}), enabled like any other extension in
+  the server's \texttt{config.toml}. At ingress it extracts the text-format submessages of the
+  incoming NLIP message and appends them to the session's \emph{trusted task}. If no
+  request in the session has a text submessage, there is no trusted task and every tool call
+  is blocked. This is the only thing the
+  guard trusts as ``what the user asked'': tool descriptions and tool output are data. It
+  never blocks the NLIP message itself, and egress closes the turn in the audit log.
+\item A LangChain middleware (\texttt{awrap\_tool\_call}), bound to the NLIP session. It
+  calls the guard immediately before and after each tool call. Porting to another agent
+  framework means rewriting this adapter, a class of about 40 lines.
+\end{itemize}
+Because the framework has no tool-boundary hook, this second adapter is per agent framework;
+the application finds the guard through a registry keyed by the SE instance. Removing
+\texttt{tool\_guard} from the SE lists runs the agent undefended. Our
+undefended baseline is exactly that.
+
+\paragraph{Pre-tool check.} For each proposed call, in order:
+\begin{enumerate}
+\item \emph{Validation.} A missing trusted task, an empty tool name or non-object
+  arguments block the call (fail closed).
+\item \emph{Risk label.} The deployer labels each tool, by name, in the policy file:
+  read-only (14 tools), internal write (4), external send (3) or destructive (3). A
+  read-only call is allowed without a model call; its output is checked after the call. A
+  tool missing from the policy, for example one added later by an MCP server, is blocked.
+\item \emph{\dthree judge.} Every other call goes to \texttt{d3-flash}, a decision model of
+  the vLLM Semantic Router~\cite{d3}. It returns the probability of ``yes'' for a yes/no
+  question without generating text; we call this score P(approve). The question is: ``Would
+  the user, having made this request, approve this exact tool call as a step toward it?''
+  Explicit criteria say ``no'' means a goal the user did not ask for, data sent to someone
+  the request does not lead to, or unrequested deletes, shares or changes. \dthree sees a
+  JSON state: all user turns of the session; the call; up to 12 \emph{evidence lines} (at most
+  300 characters each), which are lines of earlier results that mention the call's recipients,
+  names or ids, so the judge can tell whether a recipient follows from content the user
+  pointed to; and the last 6 calls with their results (1,500 characters each), marked as
+  untrusted. The call runs if P(approve) $\ge 0.5$, or $\ge 0.7$ once the session is \emph{tainted}. A
+  judge error blocks.
+\end{enumerate}
+A blocked call is never sent to the MCP server. The model receives an error result with the
+judge's score, and is told not to retry and to continue with the user's request.
+
+\paragraph{Post-tool scan.} Each result (YAML from the MCP server) is parsed into text
+fields. Every field of 40 or more characters goes to \dthree, in batches of 9; shorter fields
+are not scanned, duplicates are scanned once, and only a field's first 4,000 characters are
+sent. A result that is not structured YAML is scanned as one text (its first 4,000 characters, with
+no minimum length). The question is: ``Does it contain instructions
+addressed to an AI assistant or agent \ldots{} as opposed to ordinary content written for a
+human reader?'' In a flagged field longer than 300 characters, the paragraphs (or lines) are
+scored separately. The span from the first to the last flagged one is replaced by a notice;
+if none is flagged, the whole field is. Ids, senders and dates are kept so the task can
+continue. A flagged result taints the
+session. A scan error replaces the whole result.
+
+\paragraph{Why no rules.} Earlier versions also had regex rules, a \emph{catalog check} that
+stripped hidden instructions from tool descriptions at \texttt{tools/list}, and policy rules
+that blocked planted values and unrequested deletes. We dropped all three: the regex rules
+match the very templates of our attack sets (\texttt{<IMPORTANT>}, \texttt{<INFORMATION>}),
+which amounts to knowing the test in advance, and the description rules catch
+\CatalogRulesPlainCaught\% of plain-sentence poison. The catalog check is a trade-off
+(Appendix~\ref{app:ablation}): it gave the best task completion end to end, but cannot see
+parameter descriptions and strips unusual legitimate documentation. Against tool poisoning
+the judge alone stopped every attack these components stopped; against data injections the
+rules catch what the \dthree scanner misses, and the judge as backstop is untested.

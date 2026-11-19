@@ -1,0 +1,46 @@
+\section{What It Does Not Catch}\label{sec:limits}
+
+\begin{itemize}
+\item \textbf{Poison without a tool call.} Descriptions reach the model unchecked; \sys
+  stops the \emph{actions} poison induces. An instruction that only changes the \emph{answer}
+  (a false meeting time, a phishing link in the reply) goes through.
+\item \textbf{The judge reads attacker text.} Its input includes recent tool results and call
+  arguments, which poison can shape (``as Emma requested''). Neither path was tested:
+  \texttt{judge\_aware} ran only on dev, through data, without a guard, and never hijacked the
+  agent, so it says nothing about the judge's resistance. An
+  attacker who can query \dthree could search for wording that looks approved.
+\item \textbf{Read-only calls are unjudged}, so poison that has the agent put a code into a
+  search query leaks it to whoever sees that server's traffic, with no judged call.
+\item \textbf{The tainted threshold is unvalidated.} No decision used 0.7, yet legitimate
+  benign calls in \texttt{user\_task\_25} scored as low as \BenignLowestTwentyFive; a false
+  redaction before its remaining sends would block them. An attacker can trigger this on
+  purpose: harmless instruction-like text in a result taints the session and blocks legitimate
+  calls (denial of service).
+\item \textbf{Trust.} Every text submessage and earlier user turn is trusted as the task,
+  including pasted third-party text; non-text submessages are ignored. Risk labels are keyed
+  by tool name, so a mislabelled tool, or another server's tool reusing a read-only name, is
+  never judged.
+\item \textbf{Scanner blind spots.} Fields of structured results under 40 characters are not scanned, and only the
+  first 4,000 characters of each field are, so padding hides an injection. Recall is
+  \ScanDthreeRecall, and instructions written for a \emph{person} are flagged.
+\item \textbf{Narrow evidence.} The informative cases come from \PairedGoalCount{} goals
+  sharing one attacker address or file id. Goal 13 (phishing links to real attendees) never
+  worked on test, even undefended (\GoalThirteenHits/\GoalThirteenEps{} in a plain-parameter
+  probe that hijacked \PlainParamHits/\PlainParamEps{} sampled cases and was not run with \sys). On dev, tool poisoning achieved it \GoalThirteenDevHits{} times, and the judge-only
+  configuration (same question) blocked all \GoalThirteenDevJudgeStopped{} (P(approve)
+  $\le\GoalThirteenDevMaxP$); the final configuration was not run on them. We used two agent
+  models, one judge, one run per case, hand-set thresholds, and no MCPTox~\cite{mcptox} cases.
+\item \textbf{Privacy.} The request, every judged call and every scanned field go to a hosted
+  \dthree API (\S7.2.6 not addressed). \texttt{d3-flash}'s weights are public~\cite{d3}, so it
+  could be self-hosted; we did not.
+\item \textbf{Engineering.}
+  \begin{itemize}
+  \item Concurrent side-effecting calls can complete out of order. This costs task success on
+    \texttt{user\_task\_25}; the effect on security-relevant orderings was not analysed.
+  \item An unreachable \dthree fails closed: \OutageEvents{} times in \OutageEps{} of
+    \GuardedEps{} guarded test episodes, none in the final run.
+  \item Sessions are created before sign-in, and the least recently active one is evicted when
+    the table is full, so unauthenticated requests can evict signed-in users (\S7.2.5).
+  \item The demo serves HTTP, not TLS (\S7.1.1).
+  \end{itemize}
+\end{itemize}

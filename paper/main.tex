@@ -1,0 +1,77 @@
+% ToolGuard: CS598 AI Security, Track 3 paper.
+% Build:   python -m paper.make_tables && python -m paper.make_figures && tectonic paper/main.tex
+\documentclass[sigconf,nonacm]{acmart}
+
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds,calc}
+\usepackage{xspace}
+
+\input{generated/numbers}
+\setlength{\emergencystretch}{3em}
+
+\newcommand{\sys}{ToolGuard\xspace}
+\newcommand{\dthree}{d3\xspace}
+
+\settopmatter{printacmref=false, printccs=false, printfolios=true}
+\setcopyright{none}
+
+\begin{document}
+
+\title{ToolGuard: Task-Alignment Checks at the Tool Boundary of NLIP Agents}
+
+\author{Tse-An Hsu}
+\email{tahsu2@illinois.edu}
+\affiliation{%
+  \institution{University of Illinois Urbana-Champaign}
+  \city{Urbana}
+  \state{Illinois}
+  \country{USA}}
+
+\author{Yao-Te Wang}
+\email{yaotew2@illinois.edu}
+\affiliation{%
+  \institution{University of Illinois Urbana-Champaign}
+  \city{Urbana}
+  \state{Illinois}
+  \country{USA}}
+
+\begin{abstract}
+An AI agent that reads a poisoned tool description or a poisoned email can be steered into
+acting for the attacker with the user's own privileges. We build \sys, a pluggable Type-3
+security function for agents that speak the Natural Language Interaction Protocol (NLIP,
+ECMA-430/431), and deploy it in an NLIP email, calendar and file assistant with Google sign-in.
+It takes the user's request from the NLIP message at ingress. Before every side-effecting tool
+call it asks a decision model whether the user would approve this exact call, and after every
+call it scans the result for instructions aimed at the assistant. It uses no attack signatures.
+On 30 AgentDojo test tasks with two open-weight agent models, we replay the same 150
+tool-poisoning cases per attack style and model with and without \sys. Without it,
+\PairedTotal{} of these cases end with the attacker's goal achieved; with it, none do. The judge
+blocked the attacker's call in \PairedBlocked{} of them, and in the other \PairedNoAct{} the
+agent did not attempt the attack. On the 60 benign runs
+(no attack), \sys{} blocked no call, and the agent completed \BenignDoneFinalAll{} tasks with
+it and \BenignDoneNoneAll{} without. Legitimate calls were,
+however, blocked in \WrongBlockAttackEps{} attack episodes. The guard spends a median of
+\GuardMsLow--\GuardMsHigh\,s per episode on its checks. We report what it does not catch, and
+that the judge's wording was chosen on two test tasks and on the attacker calls we evaluate.
+\end{abstract}
+
+\maketitle
+
+\input{sections/intro}
+\input{sections/threat}
+\input{sections/app}
+\input{sections/design}
+\input{sections/data}
+\input{sections/results}
+\input{sections/limits}
+\input{sections/related}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+
+\appendix
+\input{sections/appendix}
+
+\end{document}

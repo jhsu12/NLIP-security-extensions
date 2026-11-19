@@ -1,0 +1,14 @@
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & & Benign & Wrongly & Done under \\
+Configuration & ASR & done & blocked & tagged att. \\
+\midrule
+No guard & 6.7\% & 98\% & -- & 77\% \\
+Policy rules + regex scan & 0.0\% & 82\% & 20\% & 73\% \\
+Judge only (no scan) & 0.0\% & 93\% & 0\% & 86\% \\
+Catalog check only & 0.0\% & 98\% & 0\% & 97\% \\
+Rules + judge + scan & 0.0\% & 95\% & 0\% & 88\% \\
+Rules + judge + scan + catalog & 0.0\% & 95\% & 0\% & 94\% \\
+\textbf{ToolGuard (d3 only)} & 0.0\% & 97\% & 0\% & 86\% \\
+\bottomrule
+\end{tabular}

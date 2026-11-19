@@ -1,0 +1,69 @@
+\section{Background and Threat Model}\label{sec:threat}
+
+\paragraph{NLIP} An NLIP message (ECMA-430) is a JSON object with a first submessage
+(\emph{format}, \emph{subformat}, \emph{content}) and an optional ordered list of further
+submessages. Reserved \emph{token} submessages carry control data such as the conversation
+token and an authorization credential. ECMA-431 binds NLIP to HTTP; the course framework serves it at \texttt{POST /nlip}.
+The course framework runs pluggable SEs at the server's ingress and egress, each returning
+allow, block (HTTP~403) or replace. The course's architecture defines a Type-3 SE as
+one that secures the agent's interactions with tools and models and may be invoked directly
+before or after a tool call; the framework itself has hooks only at ingress and egress.
+
+\paragraph{Attacker.} The attacker controls (i)~the \emph{metadata} of a tool the agent
+loads from an MCP server: the tool description and the descriptions of its parameters
+(\texttt{inputSchema}), which the model reads but the user does not~\cite{invariant2025,mcptox};
+and (ii)~\emph{content} that tools return: an email body, a calendar event or a shared
+file~\cite{greshake2023,agentdojo}. The attacker controls only this metadata and content, for example by pushing a malicious
+description update through a registry or proxy; in our tests the poison sits in the
+descriptions of the workspace server's own tools. An attacker who controls the server's
+backend could act without the agent and is out of scope. Poison in one server that steers calls
+to another (shadowing) was not tested; a newly added server's tools are blocked as unknown
+until the deployer labels them, unless they reuse a labelled name. The attacker does not
+control the user, the NLIP client,
+the agent host, the models or the guard, and cannot forge the user's Google ID token. The
+attacker's goal is a side effect the user did not ask for. AgentDojo's 14 workspace goals
+include sending a security code or the inbox to an outside address, deleting files,
+inviting an outsider to a meeting, and mailing phishing links.
+
+\paragraph{Why it matters for agents.} A web server that receives an injected string stores
+it. An agent reads it, reasons about it, and can act on it with every permission the user
+granted, at machine speed and out of the user's sight. A successful injection therefore
+becomes an action: mail sent from the user's account, a file deleted, a code exfiltrated.
+This is a confused deputy (ECMA-434~\S7.2.3). One poisoned MCP server can affect every user
+of every agent that loads it.
+
+\paragraph{Security objectives.} Table~\ref{tab:sco} maps \sys to the Security
+Countermeasures and Objectives (SCOs) of ECMA-434~\cite{ecma434}, Clause~7. The primary SCO
+is \S7.3.1, \emph{Prevention of Prompt Injection (including Indirect Prompt Injection)},
+which names tools as a source of untrusted content. Our end-to-end evidence, however, is for
+blocking the actions an injection induces (\S7.3.2, \S7.2.3): the descriptions are not
+filtered, and the result scanner, the filtering part, was evaluated only offline. We address individual SCOs and do not
+claim conformance to a security profile, which also requires all of Profile~1, including TLS
+(\S7.1.1).
+
+\begin{table}[t]
+\caption{ECMA-434 SCOs addressed (\S7.x.y, title as in the standard).}\label{tab:sco}
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.44\columnwidth}>{\raggedright\arraybackslash}p{0.52\columnwidth}@{}}
+\toprule
+SCO & How \\
+\midrule
+\S7.2.1 Identity \& Authentication: NLIP Client Authentication
+  & The app's Google OAuth ingress SE (not the guard). \\
+\S7.2.2 Runtime \& Behaviour: NLIP Client Authorization
+  & Partly: the sign-in SE's optional allow-list admits only listed users; the guard adds task
+    alignment, not per-client permissions. \\
+\S7.2.3 Runtime \& Behaviour: Privilege Misuse Prevention
+  & Calls the user would not approve are refused, even though the agent holds the privilege. \\
+\S7.2.4 Observability \& Audit: Agent Behaviours
+  & Partly: every decision, with its score and reason, goes to an audit log (single agent; no
+    cross-agent tracing or budgets). \\
+\S7.3.1 Prevention of Prompt Injection (including Indirect Prompt Injection)
+  & Primary threat; partly met. Tool results are scanned and injected spans redacted (no
+    end-to-end evaluation); descriptions are not filtered. \\
+\S7.3.2 Runtime Agent Behaviour Controls
+  & Each side-effecting call is validated against the user's request before it runs; this
+    is what the end-to-end results measure. \\
+\bottomrule
+\end{tabular}
+\end{table}
