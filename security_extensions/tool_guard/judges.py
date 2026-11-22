@@ -173,9 +173,11 @@ class LLMJudge:
 
         self.name = f"llm:{model}"
         self.model = model
+        base_url = base_url or os.getenv("OPENAI_BASE_URL") or f"https://llm.jetstream-cloud.org/{model}/v1"
+        api_key = api_key or os.getenv("OPENAI_API_KEY") or "empty"
         self._client = AsyncOpenAI(
-            base_url=base_url or os.getenv("OPENAI_BASE_URL"),
-            api_key=api_key or os.getenv("OPENAI_API_KEY"),
+            base_url=base_url,
+            api_key=api_key,
             timeout=60,
             max_retries=6,
         )

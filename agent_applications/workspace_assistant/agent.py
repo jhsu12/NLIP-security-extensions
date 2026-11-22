@@ -64,11 +64,14 @@ class WorkspaceAgent:
     async def start(self) -> None:
         chat_model = self._chat_model
         if chat_model is None:
-            if not os.getenv("OPENAI_API_KEY"):
-                raise RuntimeError("Set OPENAI_API_KEY (see .env.example) before starting the agent.")
+            base_url = os.getenv("OPENAI_BASE_URL")
+            if not base_url:
+                base_url = f"https://llm.jetstream-cloud.org/{self.model}/v1"
+            api_key = os.getenv("OPENAI_API_KEY") or "empty"
             chat_model = ChatOpenAI(
                 model=self.model,
-                base_url=os.getenv("OPENAI_BASE_URL"),
+                base_url=base_url,
+                api_key=api_key,
                 use_responses_api=False,
                 temperature=0,
                 # The shared Jetstream proxy rate-limits bursts (HTTP 429); the client
