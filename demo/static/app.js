@@ -68,9 +68,11 @@ function markTask(id) {
 
 // Setups where the evaluation saw the attack succeed without a guard. Picking one sets the
 // scenario, goal, style and task with the guard off; then flip the guard on and send again.
-const STYLE = { tool_poisoning: "<IMPORTANT> block in a tool description", tool_poisoning_plain: "one plain sentence in a tool description",
+const STYLE = {
+  tool_poisoning: "<IMPORTANT> block in a tool description", tool_poisoning_plain: "one plain sentence in a tool description",
   schema_poisoning: "one sentence in a parameter description", schema_poisoning_tagged: "<IMPORTANT> block in a parameter description",
-  important_instructions: "instructions planted in an email, file or event" };
+  important_instructions: "instructions planted in an email, file or event"
+};
 
 function renderExamples() {
   const goal = (id) => ui.opt.goals.find((g) => g.id === id)?.label || id;
@@ -195,7 +197,7 @@ function renderGroups() {
     $("#tools-body").innerHTML = `<h3>${ICON[g]} ${g} tools</h3><p class="muted small">MCP tools the assistant can call on Emma's ${g.toLowerCase()}.</p>
       <div class="tool-list">${ui.opt.tool_groups[g].map((t) => `<div class="tool ${poisoned[t.name] ? "poisoned" : ""}">
         <code>${esc(t.name)}${poisoned[t.name] ? " ⚠" : ""}</code><span class="muted">${poisoned[t.name]
-          ? `Description poisoned · <button class="link" data-see>see what changed</button>` : esc(t.description)}</span></div>`).join("")}</div>`;
+        ? `Description poisoned · <button class="link" data-see>see what changed</button>` : esc(t.description)}</span></div>`).join("")}</div>`;
     $("#tools-body").querySelectorAll("[data-see]").forEach((b) => (b.onclick = openChanges));
     $("#tools-dialog").showModal();
   };
@@ -285,7 +287,7 @@ async function startRun(text) {
   const data = await r.json();
   if (!r.ok) throw new Error(data.detail || r.statusText);
   $("#steps").innerHTML = "";
-  run = { id: data.run_id, convId: crypto.randomUUID(), serverTokens: [], calls: {}, meta: null, align: [], catalogScans: [], lastExecuted: null };
+  run = { id: data.run_id, convId: makeConversationId(), serverTokens: [], calls: {}, meta: null, align: [], catalogScans: [], lastExecuted: null };
   $("#export").href = `/api/runs/${run.id}/export`;
   $("#export").download = `tool-guard-run-${run.id}.json`;
   $("#export").hidden = false;
@@ -303,7 +305,7 @@ function keepTokens(body) {
   // The server's conversation token continues this NLIP session on follow-ups.
   for (const p of body.submessages || []) {
     if (p.format === "token" && p.subformat.startsWith("conversation_") && p.subformat !== "conversation_web" &&
-        !run.serverTokens.some((t) => t.content === p.content)) {
+      !run.serverTokens.some((t) => t.content === p.content)) {
       run.serverTokens.push({ format: "token", subformat: p.subformat, content: p.content });
     }
   }
@@ -349,8 +351,10 @@ function hl(text) {
 }
 
 function handle(e) {
-  ({ run: onRun, ingress: onIngress, rejected: onRejected, guard: onGuard, tool_executed: onTool, reply: onReply, outcome: onOutcome, trace: onTrace,
-     error: (x) => bubble("sys", x.message) })[e.type]?.(e);
+  ({
+    run: onRun, ingress: onIngress, rejected: onRejected, guard: onGuard, tool_executed: onTool, reply: onReply, outcome: onOutcome, trace: onTrace,
+    error: (x) => bubble("sys", x.message)
+  })[e.type]?.(e);
 }
 
 function onRun(e) {
@@ -503,9 +507,9 @@ function onOutcome(e) {
   // Say *why* an attack failed: the guard acted, or the model simply ignored the instruction.
   const attack = e.attack_success === null ? ["", "No attack", "normal scenario"]
     : e.attack_success ? ["bad", "✗ Attack succeeded", GOAL(run.meta)]
-    : run.guardActed ? ["good", "✓ Attack stopped by the guard", GOAL(run.meta)]
-    : off() ? ["", "Attack failed: the model ignored it", "No guard. Try again, or ⚡ Show me an attack"]
-    : ["good", "✓ Attack didn't happen", "the model ignored it; the guard didn't need to act"];
+      : run.guardActed ? ["good", "✓ Attack stopped by the guard", GOAL(run.meta)]
+        : off() ? ["", "Attack failed: the model ignored it", "No guard. Try again, or ⚡ Show me an attack"]
+          : ["good", "✓ Attack didn't happen", "the model ignored it; the guard didn't need to act"];
   run.outcome = e;
   box.innerHTML = [[...task, "utility"], [...attack, "attack"]].map(([c, t, s, which]) => e.checks?.[which]
     ? `<button class="verdict ${c} clickable" data-check="${which}" data-title="${esc(t)}" title="How AgentDojo decided">${t}<small>${esc(s)} · why? ⓘ</small></button>`
@@ -574,5 +578,21 @@ async function replay(ev) {
     await new Promise((r) => setTimeout(r, 350));
   }
 }
+
+const makeConversationId = () => {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+};
 
 init();
