@@ -32,6 +32,13 @@ from nlip_sdk import NLIPMessage
 from security_extensions.oauth_login import make_stub_token
 from security_extensions.tool_guard.session import extract_indicators
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 from .runs import ATTACK_EXAMPLES, GOAL_LABELS, RunManager, RunSpec
 
 DATA = Path(__file__).resolve().parent.parent / "adversarial_tests" / "tool_guard_eval" / "data"
@@ -358,8 +365,10 @@ def main() -> None:
     parser.add_argument("--plain", action="store_true", help="No colors")
     parser.add_argument("--markdown", help="Also write the narration and summary to this Markdown file")
     args = parser.parse_args()
-    if not args.stub and not (os.getenv("OPENAI_API_KEY") and os.getenv("VSR_API_KEY")):
-        parser.error("live mode needs OPENAI_API_KEY and VSR_API_KEY (source .env), or run with --stub")
+    if not os.getenv("OPENAI_API_KEY"):
+        os.environ["OPENAI_API_KEY"] = "empty"
+    if not args.stub and not os.getenv("VSR_API_KEY"):
+        parser.error("live mode needs VSR_API_KEY (in .env or environment), or run with --stub")
     selected = [s for s in SCENARIOS if not args.scenario or s.number in args.scenario]
     record: list[str] | None = [] if args.markdown else None
     printer = Printer(sys.stdout, color=sys.stdout.isatty() and not args.plain, record=record)

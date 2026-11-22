@@ -159,6 +159,13 @@ def create_app(*, offline: bool, signin: str | None = None) -> FastAPI:
 
 
 def main() -> None:
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--stub", action="store_true", help="Offline mode (no network, no API keys)")
     parser.add_argument("--signin", choices=("google", "stub"),
