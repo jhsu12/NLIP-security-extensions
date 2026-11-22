@@ -86,7 +86,7 @@ session that built everything on branch `tool-guard`.
     examples (`runs.ATTACK_EXAMPLES`, 3 are dev split) + 1 benign;
   - `web.py`: the web demo with the live full trace, plus `/runs` (browse saved episodes one by
     one), `/how` and `/checks`.
-- `tests/`: 77 offline tests (`pytest`, no network needed).
+- `tests/`: 85 offline tests (`pytest`, no network needed).
 
 ## Key findings (details in `adversarial_tests/tool_guard_eval/EXPERIMENTS.md`)
 - **Data-channel injections barely work on these models, even without the guard** (1 of 580 dev

@@ -30,7 +30,7 @@ Python 3.11 or newer:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[workspace,test]'
-pytest                                   # 77 offline tests, no network or keys needed
+pytest                                   # 85 offline tests, no network or keys needed
 python -m demo.replay --stub             # terminal demo: 6 attacks + 1 normal request, guard off vs on
 python -m demo.web --stub                # web demo → http://127.0.0.1:8030 (runs browser at /runs)
 ```
