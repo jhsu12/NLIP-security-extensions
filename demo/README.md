@@ -7,9 +7,16 @@ Two demos:
 ## Terminal demo (for graders)
 
 ```bash
-python -m demo.replay --stub          # offline: no keys, no network, about 10 s
-python -m demo.replay                 # live: Jetstream model + d3 judge (set -a; source .env; set +a)
-python -m demo.replay --stub --scenario 4 --markdown run.md   # one scenario, also saved as Markdown
+# Offline mode (no keys, no network, ~10 s):
+python -m demo.replay --stub
+
+# Live mode (real Jetstream LLM + live d3 decision API):
+cp .env.example .env    # VSR_API_KEY is included; inside Jetstream no OpenAI key is needed
+python -m demo.replay
+
+# Quick test options:
+python -m demo.replay --scenario 1              # run only scenario 1 (repeatable)
+python -m demo.replay --stub --markdown run.md  # also save narration and summary to Markdown
 ```
 
 It replays the web page's six **⚡ Show me an attack** cases and one normal request. Both demos
@@ -53,8 +60,9 @@ How it maps to the spec's demo requirements (§6.3):
    blocked with it on, whether the user's task was still done, and the guard's time and judge
    calls.
 
-**Requirements:** Python 3.11+ with `pip install -e '.[workspace,test]'`. Offline needs nothing
-else. Live needs `OPENAI_API_KEY`, `OPENAI_BASE_URL` and `VSR_API_KEY`.
+**Requirements:** Python 3.11+ with `pip install -e '.[workspace,test]'`.
+- **Offline:** needs nothing else.
+- **Live:** needs `VSR_API_KEY` (already provided in `.env.example`). When running inside Jetstream, direct unauthenticated model endpoints (`https://llm.jetstream-cloud.org/<model>/v1/`) are used automatically without an OpenAI API key. Outside Jetstream, provide `OPENAI_BASE_URL=https://llm.jetstream-cloud.org/api` and `OPENAI_API_KEY`. (The scripts automatically load `.env`).
 
 **Offline mode:** a scripted agent replays AgentDojo's correct tool calls, and obeys any
 attacker instruction it can see (the worst case). d3 is replaced by a stub that knows the
@@ -133,20 +141,18 @@ attacker's calls when it can *see* the attacker's instruction. d3 is simulated b
 knows the attacker's goal and intended calls. Offline runs show *how* the pipeline works; the
 measured numbers come from live runs.
 
-Live (Jetstream model, d3 judge, Google sign-in):
+Live (Jetstream model, d3 judge, 1-click Demo sign-in — recommended for server & grading):
 
 ```bash
-set -a; source .env; set +a        # OPENAI_*, VSR_API_KEY, GOOGLE_WEB_CLIENT_ID
-python -m demo.web
+cp .env.example .env
+python -m demo.web --signin stub --host 0.0.0.0 --port 8030
 ```
+Navigate to `http://<server-ip>:8030` in your browser. Clicking **Sign in (demo user)** logs in immediately with a verified token without requiring Google OAuth setup.
 
-Live without a Google account (e.g. graders on Jetstream). This uses the real model and judge,
-plus a "Sign in (demo user)" button. `oauth_verify` still checks every request, against a locally
-signed token:
+Live with Google sign-in:
 
 ```bash
-set -a; source .env; set +a        # OPENAI_*, VSR_API_KEY
-python -m demo.web --signin stub
+python -m demo.web --port 8030
 ```
 
 Google sign-in in the browser needs an OAuth client of type **Web application**. Its Authorized

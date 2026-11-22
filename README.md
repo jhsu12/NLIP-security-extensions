@@ -41,12 +41,13 @@ check. The web
 demo's `/runs` page lets you step through every saved evaluation episode with its full trace. See
 [`demo/README.md`](demo/README.md).
 
-For the live assistant (Jetstream LLM, d3 judge, Google sign-in), copy `.env.example` to `.env`
-and fill in the keys. See [`agent_applications/workspace_assistant/README.md`](agent_applications/workspace_assistant/README.md).
+For the live assistant (Jetstream LLM, d3 judge):
 
 ```bash
-set -a; source .env; set +a
-python -m demo.web                                              # live web demo
+cp .env.example .env   # VSR_API_KEY is included; inside Jetstream, direct endpoint is auto-used
+
+python -m demo.replay                                           # live terminal demo (6 attacks + 1 normal)
+python -m demo.web --signin stub                                # live web demo with 1-click login
 python -m agent_applications.workspace_assistant.nlip_agent     # or: NLIP server …
 python -m agent_applications.workspace_assistant.chat_client    # … and terminal chat client
 ```
